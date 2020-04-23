@@ -7,6 +7,7 @@ However, IFF is limited to 32-bit chunk lengths which is inadequate.
 The same chunk format is used for a couple types of files:
 	- Informative that contains information about the entire dataset
 	- Waveform files to permit slicing up large datasets into multiple files
+	- Annotation files to add markers at various frames in the files
 
 Terminology
 * A recording is the entirety of recorded data with a specified number of channels and specified number of frames of data
@@ -16,7 +17,7 @@ Terminology
 * An annotation is a marker associated to a frame or frames that gives meaning beyond the raw binary data; interpretive information
 
 Assumptions
-* Each channel has a fixed bit size and does not change throuhgout the recording
+* Each channel has a fixed bit size and does not change throughout the recording
 * Fixed number of channels throughout the recording
 * Sampling rate is fixed throughout the recording and across channels
 * Not all channels are required to be recorded at a given time, but different WIFFWAVE chunks are needed
@@ -45,19 +46,30 @@ Chunks
 
 	Info chunk that is used to coordinate high-level information.
 
-	Contains
-	- Recording
-		- Description
-		- Start time
-		- End time
-		- Sampling rate
-	- Number of channels
-	- For each channel
-		- Name
-		- Size in bits
-		- Physical units
-		- Comments
+	Data
+		[0:1] -- Byte index of start time string
+		[2:3] -- Byte index of end time string
+		[4:5] -- Byte index of description
+		[6:7] -- Byte index of channel definitions start (X)
+		[8:9] -- Byte index of channel definitions end (Y)
+		[10:11] -- 16-bit sampling rate in samples per second
+		[12:13] -- Number of channels (max 256 supported)
+		[14:15] -- Byte index of start of channel information
+		[16:X-1] -- Start of string data for above
+		[X:Y] -- Start of channel definitions as non-padded sequences of the definition below
 
+		Thus, the indices of the strings' start and end can be calculated and the total size of the data block determined without having to parse actual content data (total size is in [8:9]). Strings are NOT null terminated.
+
+
+	Channel definition:
+		[0:1] -- Byte index of name of channel string
+		[2] -- Size of samples in bits (actual storage space are upper-bit padded full bytes)
+		[3:4] -- Byte index of physical units string
+		[5:6] -- Byte index of comments string start
+		[7:8] -- Byte index of comments string end (X)
+		[9:X] -- Strings
+
+		Channel definitions are in sequance right after each other, and so [X+1] marks the start of the next channel definition (if not the last channel).
 
 
 	WIFFWAVE -- Waveform data
@@ -69,13 +81,17 @@ Chunks
 		[1] -- Reserved
 		[2] -- Reserved
 		[3] -- Reserved
-		[4-7] -- 32 bit chunk ID references in WIFFINFO to order the chunks
+		[4:7] -- 32 bit chunk ID references in WIFFINFO to order the chunks
 				 Chunk ID's need not be in numerical order, only unique within the same WIFF data set.
 
 	If compression is used, the entire data block, except padding bytes, are decompressed first.
 
-	Identify which channels are present
-	Contains frames of samples
+	Data
+		[0:7] -- Bitfield identifying which channels are present from 0 to 255
+		[8:15] -- First frame index
+		[16:23] -- Last frame index
+		[24:X] -- Frames
+
 
 
 
@@ -94,6 +110,8 @@ Chunks
 """
 
 import os.path
+
+import funpack
 
 from .compress import WIFFCompress
 
@@ -135,6 +153,18 @@ class _WIFF_file:
 	"""
 
 	def __init__(self, fname):
-		pass
+		self.fname = fname
+		with open(fname, 'rb') as f:
+			header = f.read(24)
+
+		fup = funpack.funpack(header, endian=funpack.Endianness.Big)
+		self.magic = fup.string_ascii(4)
+		self.length = fup.u64()
+		self.attrs = fup.u8(8)
+		self.file_size = os.path.getsize(fname)
+
+class _WIFFINFO_file:
+	def __init__(self, f):
+		self.f = f
 
 
