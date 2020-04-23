@@ -167,4 +167,8 @@ class _WIFFINFO_file:
 	def __init__(self, f):
 		self.f = f
 
+		with open(self.f.fname, 'rb') as f:
+			header = f.read(8*8)
+
+			fup = funpack.funpack(header, endian=funpack.Endianness.Big)
 
