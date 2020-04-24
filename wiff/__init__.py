@@ -54,8 +54,7 @@ Chunks
 		[8:9] -- Byte index of channel definitions end (Y)
 		[10:11] -- 16-bit sampling rate in samples per second
 		[12:13] -- Number of channels (max 256 supported)
-		[14:15] -- Byte index of start of channel information
-		[16:X-1] -- Start of string data for above
+		[14:X-1] -- Start of string data for above
 		[X:Y] -- Start of channel definitions as non-padded sequences of the definition below
 
 		Thus, the indices of the strings' start and end can be calculated and the total size of the data block determined without having to parse actual content data (total size is in [8:9]). Strings are NOT null terminated.
@@ -109,15 +108,17 @@ Chunks
 
 """
 
+import datetime
 import os.path
 
 import funpack
 
 from .compress import WIFFCompress
 
+DATE_FMT = "%Y%m%d %H%M%S.%f"
 
 class WIFF:
-	def __init__(self, fname):
+	def __init__(self, fname, props=None):
 		# f is the WAVEINFO file
 		self.f = None
 
@@ -127,7 +128,7 @@ class WIFF:
 		if os.path.exists(fname):
 			self._open_read(fname)
 		else:
-			self._open_new(fname)
+			self._open_new(fname, props)
 
 	def __enter__(self):
 		return self
@@ -141,10 +142,23 @@ class WIFF:
 		pass
 
 	def _open_read(self, fname):
-		self.f = open(fname, '+b')
+		self.f = open(fname, 'rb')
 
-	def _open_new(self, fname):
+		dat = self.f.read()
+
+		props = _WIFFINFO_header.DeSer(dat)
+		print(['props', props])
+
+	def _open_new(self, fname, props):
 		self.f = open(fname, 'wb')
+
+		start = props['start'].strftime(DATE_FMT)
+		end = props['end'].strftime(DATE_FMT)
+
+		d = _WIFFINFO_header.Ser(start, end, props['description'], props['fs'], props['channels'])
+		self.f.write(d)
+		self.f.close()
+
 
 class _WIFF_file:
 	"""
@@ -171,4 +185,128 @@ class _WIFFINFO_file:
 			header = f.read(8*8)
 
 			fup = funpack.funpack(header, endian=funpack.Endianness.Big)
+			indices = fup.u16(5)
+			indices = list(indices)
+			srate = fup.u16()
+			num_chan = fup.u16()
+			indices.append( fup.u16() )
+
+			print(['indices', indices])
+
+class _WIFFINFO_header:
+	@classmethod
+	def Ser(cls, start, end, desc, fs, chans):
+		b_start = start.encode('utf8')
+		b_end = end.encode('utf8')
+		b_desc = desc.encode('utf8')
+
+		fp = funpack.fpack(endian=funpack.Endianness.Big)
+
+		# Start time at 14
+		idx = 14
+		fp.u16(idx)
+		idx += len(b_start)
+
+		# End time
+		fp.u16(idx)
+		idx += len(b_end)
+
+		# Description
+		fp.u16(idx)
+		idx += len(b_desc)
+
+		# Start of chennel descriptions
+		fp.u16(idx)
+
+		# Start offset for channel descriptions
+		chanidx = idx
+
+		fz = funpack.fpack(endian=funpack.Endianness.Big)
+		for chan in chans:
+			b_name = chan['name'].encode('utf8')
+			b_unit = chan['unit'].encode('utf8')
+			b_comment = chan['comment'].encode('utf8')
+
+			# Channel name at 9
+			chanidx += 9
+			fz.u16(chanidx)
+			chanidx += len(b_name)
+
+			# Sample bit depth
+			fz.u8(chan['bit'])
+
+			# Physical units
+			fz.u16(chanidx)
+			chanidx += len(b_unit)
+
+			# Comment
+			fz.u16(chanidx)
+			chanidx += len(b_comment)
+
+			# End of strings
+			fz.u16(chanidx-1)
+
+			fz.bytes(b_name)
+			fz.bytes(b_unit)
+			fz.bytes(b_comment)
+
+		# End of channel definitions
+		fp.u16(chanidx-1)
+
+		# Sampling rate
+		fp.u16(fs)
+
+		# Number of channels
+		fp.u16(len(chans))
+
+		# Add in strings
+		fp.bytes(b_start)
+		fp.bytes(b_end)
+		fp.bytes(b_desc)
+
+		# Add in channel data
+		fp.bytes(fz.Data)
+
+		return fp.Data
+
+	@classmethod
+	def DeSer(cls, dat):
+		fup = funpack.funpack(dat, endian=funpack.Endianness.Big)
+
+		idx_start = fup.u16()
+		idx_end = fup.u16()
+		idx_desc = fup.u16()
+		idx_chan = fup.u16()
+		idx__END__ = fup.u16()
+		fs = fup.u16()
+		num_chan = fup.u16()
+
+		s_start = fup.string_utf8(idx_end - idx_start)
+		s_end = fup.string_utf8(idx_desc - idx_end)
+		s_desc = fup.string_utf8(idx_chan - idx_desc)
+
+		props = {
+			'start': datetime.datetime.strptime(s_start, DATE_FMT),
+			'end': datetime.datetime.strptime(s_end, DATE_FMT),
+			'description': s_desc,
+			'fs': fs,
+			'channels': [],
+		}
+
+		for i in range(num_chan):
+			idx_name = fup.u16()
+			bits = fup.u8()
+			idx_unit = fup.u16()
+			idx_comment = fup.u16()
+			idx__END__ = fup.u16()
+
+			c = {
+				'name': fup.string_utf8(idx_unit - idx_name),
+				'bit': bits,
+				'unit': fup.string_utf8(idx_comment - idx_unit),
+				'comment': fup.string_utf8(idx__END__+1 - idx_comment),
+			}
+			props['channels'].append(c)
+
+		return props
 
