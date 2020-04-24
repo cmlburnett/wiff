@@ -55,7 +55,8 @@ Chunks
 		[10:11] -- 16-bit sampling rate in samples per second
 		[12:13] -- Number of channels (max 256 supported)
 		[14:X-1] -- Start of string data for above
-		[X:Y] -- Start of channel definitions as non-padded sequences of the definition below
+		[X:Y-1] -- Start of channel definitions as non-padded sequences of the definition below
+		[Y:Z] -- Start of file definitions as non-padded sequences of the definition below
 
 		Thus, the indices of the strings' start and end can be calculated and the total size of the data block determined without having to parse actual content data (total size is in [8:9]). Strings are NOT null terminated.
 
@@ -69,6 +70,11 @@ Chunks
 		[9:X] -- Strings
 
 		Channel definitions are in sequance right after each other, and so [X+1] marks the start of the next channel definition (if not the last channel).
+
+	File definitions:
+		[0:1] -- Byte index of file name string
+		[2:9] -- Start frame index
+		[10:17] -- End frame index (inclusive)
 
 
 	WIFFWAVE -- Waveform data
@@ -146,52 +152,48 @@ class WIFF:
 
 		dat = self.f.read()
 
+		header = _WIFF_file.DeSer(dat)
+		dat = dat[24:]
+
 		props = _WIFFINFO_header.DeSer(dat)
+		print(['header', header])
 		print(['props', props])
 
 	def _open_new(self, fname, props):
 		self.f = open(fname, 'wb')
 
+
 		start = props['start'].strftime(DATE_FMT)
 		end = props['end'].strftime(DATE_FMT)
 
 		d = _WIFFINFO_header.Ser(start, end, props['description'], props['fs'], props['channels'])
+
+		h = _WIFF_file.Ser('WIFFINFO', len(d), (0,0,0,0,0,0,0,0))
+
+		self.f.write(h)
 		self.f.write(d)
 		self.f.close()
 
 
 class _WIFF_file:
-	"""
-	Contains information about a specific file.
-	Reads the chunks and indexes them, and collects pertinent information about them.
-	"""
+	@classmethod
+	def Ser(cls, magic, size, attrs):
+		fp = funpack.fpack(endian=funpack.Endianness.Big)
+		fp.string_ascii(magic)
+		fp.u64(size)
+		fp.u8(*attrs)
 
-	def __init__(self, fname):
-		self.fname = fname
-		with open(fname, 'rb') as f:
-			header = f.read(24)
+		return fp.Data
 
-		fup = funpack.funpack(header, endian=funpack.Endianness.Big)
-		self.magic = fup.string_ascii(4)
-		self.length = fup.u64()
-		self.attrs = fup.u8(8)
-		self.file_size = os.path.getsize(fname)
+	@classmethod
+	def DeSer(cls, dat):
+		fup = funpack.funpack(dat, endian=funpack.Endianness.Big)
 
-class _WIFFINFO_file:
-	def __init__(self, f):
-		self.f = f
+		magic = fup.string_ascii(8)
+		size = fup.u64()
+		attrs = fup.u8(8)
 
-		with open(self.f.fname, 'rb') as f:
-			header = f.read(8*8)
-
-			fup = funpack.funpack(header, endian=funpack.Endianness.Big)
-			indices = fup.u16(5)
-			indices = list(indices)
-			srate = fup.u16()
-			num_chan = fup.u16()
-			indices.append( fup.u16() )
-
-			print(['indices', indices])
+		return {'magic': magic, 'size': size, 'attrs': attrs}
 
 class _WIFFINFO_header:
 	@classmethod
