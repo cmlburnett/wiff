@@ -50,11 +50,13 @@ Chunks
 		[0:1] -- Byte index of start time string
 		[2:3] -- Byte index of end time string
 		[4:5] -- Byte index of description
-		[6:7] -- Byte index of channel definitions start (X)
-		[8:9] -- Byte index of channel definitions end (Y)
-		[10:11] -- 16-bit sampling rate in samples per second
-		[12:13] -- Number of channels (max 256 supported)
-		[14:X-1] -- Start of string data for above
+		[6:7] -- Byte index of channel definitions (X)
+		[8:9] -- Byte index of files start (Y)
+		[10:11] -- Byte index of files end (Z)
+		[12:13] -- 16-bit sampling rate in samples per second
+		[14:15] -- Number of channels (max 256 supported)
+		[16:17] -- Number of files
+		[18:X-1] -- Start of string data for above
 		[X:Y-1] -- Start of channel definitions as non-padded sequences of the definition below
 		[Y:Z] -- Start of file definitions as non-padded sequences of the definition below
 
@@ -72,9 +74,11 @@ Chunks
 		Channel definitions are in sequance right after each other, and so [X+1] marks the start of the next channel definition (if not the last channel).
 
 	File definitions:
-		[0:1] -- Byte index of file name string
-		[2:9] -- Start frame index
-		[10:17] -- End frame index (inclusive)
+		[0:1] -- Byte index of file name string start
+		[2:3] -- Byte index of file name string end (X)
+		[4:11] -- Start frame index
+		[12:19] -- End frame index (inclusive)
+		[20:X] -- File name string
 
 
 	WIFFWAVE -- Waveform data
@@ -166,7 +170,7 @@ class WIFF:
 		start = props['start'].strftime(DATE_FMT)
 		end = props['end'].strftime(DATE_FMT)
 
-		d = _WIFFINFO_header.Ser(start, end, props['description'], props['fs'], props['channels'])
+		d = _WIFFINFO_header.Ser(start, end, props['description'], props['fs'], props['channels'], props['files'])
 
 		h = _WIFF_file.Ser('WIFFINFO', len(d), (0,0,0,0,0,0,0,0))
 
@@ -197,15 +201,15 @@ class _WIFF_file:
 
 class _WIFFINFO_header:
 	@classmethod
-	def Ser(cls, start, end, desc, fs, chans):
+	def Ser(cls, start, end, desc, fsamp, chans, files):
 		b_start = start.encode('utf8')
 		b_end = end.encode('utf8')
 		b_desc = desc.encode('utf8')
 
 		fp = funpack.fpack(endian=funpack.Endianness.Big)
 
-		# Start time at 14
-		idx = 14
+		# Start time at 18
+		idx = 18
 		fp.u16(idx)
 		idx += len(b_start)
 
@@ -252,14 +256,39 @@ class _WIFFINFO_header:
 			fz.bytes(b_unit)
 			fz.bytes(b_comment)
 
-		# End of channel definitions
+		fileidx = chanidx
+
+		ff = funpack.fpack(endian=funpack.Endianness.Big)
+		for fs in files:
+			b_name = fs['name'].encode('utf8')
+
+			# File name at 20
+			fileidx += 20
+			ff.u16(fileidx)
+			ff.u16(fileidx + len(b_name))
+
+			# Start and end frame index
+			ff.u64(fs['start'])
+			ff.u64(fs['end'])
+
+			# File name
+			ff.bytes(b_name)
+			fileidx += len(b_name)
+
+		# Start of files
 		fp.u16(chanidx-1)
 
+		# End of files
+		fp.u16(fileidx-1)
+
 		# Sampling rate
-		fp.u16(fs)
+		fp.u16(fsamp)
 
 		# Number of channels
 		fp.u16(len(chans))
+
+		# Number of files
+		fp.u16(len(files))
 
 		# Add in strings
 		fp.bytes(b_start)
@@ -268,6 +297,9 @@ class _WIFFINFO_header:
 
 		# Add in channel data
 		fp.bytes(fz.Data)
+
+		# Add in files data
+		fp.bytes(ff.Data)
 
 		return fp.Data
 
@@ -279,9 +311,11 @@ class _WIFFINFO_header:
 		idx_end = fup.u16()
 		idx_desc = fup.u16()
 		idx_chan = fup.u16()
+		idx_files = fup.u16()
 		idx__END__ = fup.u16()
 		fs = fup.u16()
 		num_chan = fup.u16()
+		num_files = fup.u16()
 
 		s_start = fup.string_utf8(idx_end - idx_start)
 		s_end = fup.string_utf8(idx_desc - idx_end)
@@ -293,6 +327,7 @@ class _WIFFINFO_header:
 			'description': s_desc,
 			'fs': fs,
 			'channels': [],
+			'files': [],
 		}
 
 		for i in range(num_chan):
@@ -309,6 +344,19 @@ class _WIFFINFO_header:
 				'comment': fup.string_utf8(idx__END__+1 - idx_comment),
 			}
 			props['channels'].append(c)
+
+		for i in range(num_files):
+			idx_name = fup.u16()
+			idx__END__ = fup.u16()
+			fidx_start = fup.u64()
+			fidx_end = fup.u64()
+
+			f = {
+				'name': fup.string_utf8(idx__END__ - idx_name),
+				'start': fidx_start,
+				'end': fidx_end,
+			}
+			props['files'].append(f)
 
 		return props
 
