@@ -11,17 +11,18 @@ The same chunk format is used for a couple types of files:
 
 Terminology
 * A recording is the entirety of recorded data with a specified number of channels and specified number of frames of data
-* A frame consists of samples across all present channels at a given point in time
+* A recording is broken into segments consisting of multiple frames
+* A frame consists of samples across all present channels in a segment at a given point in time
 * A channel is a specific binary data source of data that is piece-wise present (not present sample-by-sample, but over a continous time period)
 * Time index is the index into the frames from zero (start of recording) to N (last frame of the recording)
 * An annotation is a marker associated to a frame or frames that gives meaning beyond the raw binary data; interpretive information
 
 Assumptions
 * Each channel has a fixed bit size and does not change throughout the recording
-* Fixed number of channels throughout the recording
+* Fixed number of total channels throughout the recording
 * Sampling rate is fixed throughout the recording and across channels
-* Not all channels are required to be recorded at a given time, but different WIFFWAVE chunks are needed
-  at boundaries where channel presence changes
+* Segments can have different sets of active channels
+* One segment per WIFFWAVE chunk, one WIFFWAVE chunk per segment
 * Essentially no limit on duration of recording; entire recording can span any number of files
   effectively limited by the WIFFWAVE.ChunkID 32-bit unique ID and 64-bit size of chunks
 * Max 255 channels supported (8-bit index) but not unreasonable to support 16-bit indices
