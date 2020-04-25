@@ -236,7 +236,15 @@ class WIFF:
 		"""
 		Dump WIFF meta data into a dict() for handling within Python.
 		"""
-		raise NotImplementedError
+		ret = {
+			'file': self.f.name,
+			'start': self.start,
+			'end': self.end,
+			'description': self.description,
+			'fs': self.fs
+		}
+
+		return ret
 
 	def dumps_str(self):
 		"""
@@ -245,7 +253,11 @@ class WIFF:
 
 		d = self.dumps_dict()
 
-		raise NotImplementedError
+		ret = []
+		ret.append("%20s | %s" % ("File", d['file']))
+		ret.append("%20s | %s" % ("Description", d['description']))
+
+		return ret
 
 	def dumps_json(self):
 		"""
