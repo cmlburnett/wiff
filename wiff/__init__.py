@@ -118,7 +118,9 @@ Chunks
 
 """
 
+import copy
 import datetime
+import json
 import os.path
 
 import funpack
@@ -126,6 +128,7 @@ import funpack
 from .compress import WIFFCompress
 
 DATE_FMT = "%Y%m%d %H%M%S.%f"
+WIFF_VERSION = 1
 
 class WIFF:
 	def __init__(self, fname, props=None):
@@ -133,12 +136,41 @@ class WIFF:
 		self.f = None
 
 		# List of files containing WIFFWAVE chunks
-		self.files = []
+		self._files = []
 
 		if os.path.exists(fname):
-			self._open_read(fname)
+			self._open_existing(fname)
 		else:
 			self._open_new(fname, props)
+
+	@property
+	def fs(self): return self._props['fs']
+	@fs.setter
+	def fs(self, v): self._props['fs'] = v
+
+	@property
+	def start(self): return self._props['start']
+	@start.setter
+	def start(self, v): self._props['start'] = v
+
+	@property
+	def end(self): return self._props['end']
+	@end.setter
+	def end(self, v): self._props['end'] = v
+
+	@property
+	def description(self): return self._props['description']
+	@description.setter
+	def description(self, v): self._props['description'] = v
+
+	@property
+	def channels(self):
+		return WIFF_channels(self._props['channels'])
+
+	@property
+	def files(self):
+		return copy.deepcopy(self._props['files'])
+
 
 	def __enter__(self):
 		return self
@@ -149,37 +181,160 @@ class WIFF:
 
 	def close(self):
 		""" Close """
-		pass
+		if self._f:
+			self._f.close()
+			self._f = None
 
-	def _open_read(self, fname):
-		self.f = open(fname, 'rb')
+	def _open_existing(self, fname):
+		self._f = open(fname, 'rb')
 
-		dat = self.f.read()
+		self._chunks = []
 
-		header = _WIFF_file.DeSer(dat)
-		dat = dat[24:]
+		chunks = _WIFF_file.FindChunks(self._f)
+		for chunk in chunks:
+			if chunk['magic'] == 'WIFFINFO':
+				self._f.seek(chunk['offset data'])
+				dat = self._f.read(chunk['size'])
 
-		props = _WIFFINFO_header.DeSer(dat)
-		print(['header', header])
-		print(['props', props])
+				props = _WIFFINFO_header.DeSer(dat)
+
+				self._chunks.append({
+					'file': fname,
+					'magic': chunk['magic'],
+					'size': chunk['size'],
+					'offset header': chunk['offset header'],
+					'offset data': chunk['offset data'],
+					'_attrs': chunk['attrs'],
+					'attrs': {
+						'version': chunk['attrs'][0],
+					},
+				})
+				self._props = props
+			else:
+				raise NotImplementedError
+
 
 	def _open_new(self, fname, props):
-		self.f = open(fname, 'wb')
-
+		self._f = open(fname, 'wb')
 
 		start = props['start'].strftime(DATE_FMT)
 		end = props['end'].strftime(DATE_FMT)
 
 		d = _WIFFINFO_header.Ser(start, end, props['description'], props['fs'], props['channels'], props['files'])
 
-		h = _WIFF_file.Ser('WIFFINFO', len(d), (0,0,0,0,0,0,0,0))
+		h = _WIFF_file.Ser('WIFFINFO', len(d), (1,0,0,0,0,0,0,0))
 
-		self.f.write(h)
-		self.f.write(d)
-		self.f.close()
+		self._f.write(h)
+		self._f.write(d)
+		self._f.close()
+
+		# Now open as existing
+		self._open_existing(fname)
+
+	def dumps_dict(self):
+		"""
+		Dump WIFF meta data into a dict() for handling within Python.
+		"""
+		raise NotImplementedError
+
+	def dumps_str(self):
+		"""
+		Dump WIFF meta data into a string that can be printed.
+		"""
+
+		d = self.dumps_dict()
+
+		raise NotImplementedError
+
+	def dumps_json(self):
+		"""
+		Dump WIFF meta data into a json for handling within Python.
+		"""
+
+		return json.dumps(self.dumps_dict())
+
+class WIFF_channels:
+	"""
+	Simple wrapper class to the channels.
+	Implements the item getter pattern that returns WIFF_channel instances that then
+	 permits getting and setting channel properties.
+	"""
+
+	def __init__(self, channels):
+		self._channels = channels
+
+	def __getitem__(self, idx):
+		# Throw error if bad index
+		if type(idx) == slice:
+			items = self._channels[idx]
+			return [WIFF_channel(item['index'], self._channels) for item in items]
+		else:
+			x = self._channels[idx]
+			return WIFF_channel(idx, self._channels)
+
+	def __len__(self):
+		return len(self._channels)
+
+	def __repr__(self):
+		return "<WIFF_channels count=%d>" % len(self)
+
+class WIFF_channel:
+	"""
+	Simple wrapper around channel dictionary.
+	Permits getting and setting channel properties.
+	"""
+
+	def __init__(self, index, channels):
+		self._index = index
+		self._channels = channels
+
+	def __repr__(self):
+		return "<WIFF_channel i=%d name='%s' bit=%d unit='%s' comment='%s'>" % (self._index, self.name, self.bit, self.unit, self.comment)
+
+	@property
+	def name(self): return self._channels[self._index]['name']
+	@name.setter
+	def name(self, v): self._channels[self._index]['name'] = v
+
+	@property
+	def bit(self): return self._channels[self._index]['bit']
+	@bit.setter
+	def bit(self, v): self._channels[self._index]['bit'] = v
+
+	@property
+	def unit(self): return self._channels[self._index]['unit']
+	@unit.setter
+	def unit(self, v): self._channels[self._index]['unit'] = v
+
+	@property
+	def comment(self): return self._channels[self._index]['comment']
+	@comment.setter
+	def comment(self, v): self._channels[self._index]['comment'] = v
+
 
 
 class _WIFF_file:
+	@classmethod
+	def FindChunks(cls, f):
+		sz = os.path.getsize(f.name)
+
+		chunks = []
+
+		off = 0
+		while off < sz:
+			f.seek(off)
+			head = f.read(24)
+			p = cls.DeSer(head)
+
+			# Include offsets
+			p['offset header'] = off
+			p['offset data'] = off + 24
+
+			chunks.append(p)
+			off += p['size'] + 24 # Add header size
+
+		return chunks
+
 	@classmethod
 	def Ser(cls, magic, size, attrs):
 		fp = funpack.fpack(endian=funpack.Endianness.Big)
@@ -338,6 +493,7 @@ class _WIFFINFO_header:
 			idx__END__ = fup.u16()
 
 			c = {
+				'index': i,
 				'name': fup.string_utf8(idx_unit - idx_name),
 				'bit': bits,
 				'unit': fup.string_utf8(idx_comment - idx_unit),
@@ -352,6 +508,7 @@ class _WIFFINFO_header:
 			fidx_end = fup.u64()
 
 			f = {
+				'index': i,
 				'name': fup.string_utf8(idx__END__ - idx_name),
 				'start': fidx_start,
 				'end': fidx_end,
