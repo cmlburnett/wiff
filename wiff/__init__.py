@@ -40,6 +40,11 @@ WIFF chunk format
 	Zero padding bytes to make entire chunk to be a multiple of 8
 
 Chunks
+	It is encouraged to put chunk boundaries on 4096 byte blocks, or larger.
+	This permits modifying a file in place without having to rewrite the entire file.
+	If streaming to the end of a chunk then this matters less.
+
+
 	WIFFINFO -- Information
 	Attributes
 		[0] -- Version of WIFF
@@ -57,7 +62,8 @@ Chunks
 		[12:13] -- 16-bit sampling rate in samples per second
 		[14:15] -- Number of channels (max 256 supported)
 		[16:17] -- Number of files
-		[18:X-1] -- Start of string data for above
+		[18:25] -- Number of frames
+		[26:X-1] -- Start of string data for above
 		[X:Y-1] -- Start of channel definitions as non-padded sequences of the definition below
 		[Y:Z] -- Start of file definitions as non-padded sequences of the definition below
 
@@ -91,16 +97,16 @@ Chunks
 		[1] -- Reserved
 		[2] -- Reserved
 		[3] -- Reserved
-		[4:7] -- 32 bit chunk ID references in WIFFINFO to order the chunks
+		[4:7] -- 32 bit segment ID references in WIFFINFO to order the chunks
 				 Chunk ID's need not be in numerical order, only unique within the same WIFF data set.
 
 	If compression is used, the entire data block, except padding bytes, are decompressed first.
 
 	Data
-		[0:7] -- Bitfield identifying which channels are present from 0 to 255
-		[8:15] -- First frame index
-		[16:23] -- Last frame index
-		[24:X] -- Frames
+		[0:31] -- Bitfield identifying which channels are present from 0 to 255
+		[32:39] -- First frame index
+		[40:47] -- Last frame index
+		[48:X] -- Frames
 
 
 
@@ -116,28 +122,26 @@ Chunks
 	Annotations
 
 
-
 """
 
 import copy
 import datetime
 import json
 import os.path
+import struct
 
 import funpack
 
+from .bits import bitfield
 from .compress import WIFFCompress
 
 DATE_FMT = "%Y%m%d %H%M%S.%f"
 WIFF_VERSION = 1
+ENDIAN = funpack.Endianness.Little
 
 class WIFF:
 	def __init__(self, fname, props=None):
-		# f is the WAVEINFO file
-		self.f = None
-
-		# List of files containing WIFFWAVE chunks
-		self._files = []
+		self.fname = None
 
 		if os.path.exists(fname):
 			self._open_existing(fname)
@@ -165,6 +169,9 @@ class WIFF:
 	def description(self, v): self._props['description'] = v
 
 	@property
+	def num_frames(self): return self._props['num_frames']
+
+	@property
 	def channels(self):
 		return WIFF_channels(self._props['channels'])
 
@@ -172,77 +179,154 @@ class WIFF:
 	def files(self):
 		return copy.deepcopy(self._props['files'])
 
-
-	def __enter__(self):
-		return self
-
-	def __exit__(self, *exc):
-		self.close()
-		return False
-
-	def close(self):
-		""" Close """
-		if self._f:
-			self._f.close()
-			self._f = None
-
 	def _open_existing(self, fname):
-		self._f = open(fname, 'rb')
+		self.fname = fname
 
-		self._chunks = []
+		with open(fname, 'rb') as _f:
+			# Reset these
+			self._files = []
+			self._chunks = []
+			self._segments = {}
 
-		chunks = _WIFF_file.FindChunks(self._f)
-		for chunk in chunks:
-			if chunk['magic'] == 'WIFFINFO':
-				self._f.seek(chunk['offset data'])
-				dat = self._f.read(chunk['size'])
+			# Current file to save new segments to
+			self._current_file = None
+			# Current segment to save new frames to
+			self._current_segment = None
 
-				props = _WIFFINFO_header.DeSer(dat)
+			# Pull out chunks of the main file
+			chunks = _WIFF_file.FindChunks(_f)
+			for chunk in chunks:
+				if chunk['magic'] == 'WIFFINFO':
+					_f.seek(chunk['offset data'])
+					dat = _f.read(chunk['size'])
 
-				self._chunks.append({
-					'file': fname,
-					'magic': chunk['magic'],
-					'size': chunk['size'],
-					'offset header': chunk['offset header'],
-					'offset data': chunk['offset data'],
-					'_attrs': chunk['attrs'],
-					'attrs': {
-						'version': chunk['attrs'][0],
-					},
-				})
-				self._props = props
-			else:
-				raise NotImplementedError
+					props = _WIFFINFO_header.DeSer(dat)
+
+					self._chunks.append({
+						'file': fname,
+						'magic': chunk['magic'],
+						'size': chunk['size'],
+						'offset header': chunk['offset header'],
+						'offset data': chunk['offset data'],
+						'num_frames': props['num_frames'],
+						'_attrs': chunk['attrs'],
+						'attrs': {
+							'version': chunk['attrs'][0],
+						},
+					})
+					self._props = props
+				else:
+					raise NotImplementedError
 
 
 	def _open_new(self, fname, props):
-		self._f = open(fname, 'wb')
+		with open(fname, 'wb') as _f:
+			start = props['start'].strftime(DATE_FMT)
+			end = props['end'].strftime(DATE_FMT)
 
-		start = props['start'].strftime(DATE_FMT)
-		end = props['end'].strftime(DATE_FMT)
+			num_frames = 0
 
-		d = _WIFFINFO_header.Ser(start, end, props['description'], props['fs'], props['channels'], props['files'])
+			d = _WIFFINFO_header.Ser(start, end, props['description'], props['fs'], num_frames, props['channels'], props['files'])
 
-		h = _WIFF_file.Ser('WIFFINFO', len(d), (1,0,0,0,0,0,0,0))
 
-		self._f.write(h)
-		self._f.write(d)
-		self._f.close()
+			# Pad up to 4096 block
+			pad = b'0' * (len(d) + 4096 - (len(d)%4096))
+
+			h = _WIFF_file.Ser('WIFFINFO', len(d) + len(pad), (1,0,0,0,0,0,0,0))
+
+			_f.write(h)
+			_f.write(d)
+			_f.write(pad)
 
 		# Now open as existing
 		self._open_existing(fname)
+
+	# -----------------------------------------------
+	# -----------------------------------------------
+	# Add data
+
+	def set_file(self, fname):
+		self._current_file = fname
+		self._current_segment = None
+
+	def set_segment(self, segmentid):
+		raise NotImplementedError
+
+	def new_file(self, fname):
+		raise NotImplementedError
+
+	def new_segment(self, *chans, segmentid=None):
+		if self._current_file is None:
+			raise ValueError("Must set active file before creating a new segment")
+
+		# Blank current segment pointer
+		self._current_segment = None
+
+		# Auto-generated segment ID's
+		if segmentid is None:
+			raise NotImplementedError("Pick an available segmentid")
+
+		# No segments, this is the first
+		if not len(self._segments):
+			s = {
+				'magic': "WIFFWAVE",
+				'size': None,
+				'_attrs': None, # Generate from attrs
+				'attrs': {
+					'compression': None,
+					'segmentid': segmentid,
+				},
+				'channels': tuple(sorted([_.index for _ in chans])),
+				'fidx_start': self.num_frames,
+				'fidx_end': self.num_frames,
+			}
+			self._segments[segmentid] = s
+			self._current_segment = segmentid
+
+			# Create chunk for frames
+			dat = _WIFFWAVE.Ser(None, segmentid, channels, self.num_frames, self.num_frames)
+
+			# Alter the file
+			_WIFF_file.AddChunk(self._current_file, dat)
+
+
+		else:
+			raise NotImplementedError
+
+		
+
+	def add_frame(self, *samps):
+		raise NotImplementedError
+
+	# -----------------------------------------------
+	# -----------------------------------------------
+	# Dump
 
 	def dumps_dict(self):
 		"""
 		Dump WIFF meta data into a dict() for handling within Python.
 		"""
 		ret = {
-			'file': self.f.name,
+			'file': self._f.name,
 			'start': self.start,
 			'end': self.end,
 			'description': self.description,
-			'fs': self.fs
+			'fs': self.fs,
+			'num_frames': self.num_frames,
+			'channels': [],
+			'files': [],
+			'segments': [],
 		}
+
+		for i in range(len(self.channels)):
+			c = self.channels[i]
+			ret['channels'].append({
+				'idx': i,
+				'name': c.name,
+				'bit': c.bit,
+				'unit': c.unit,
+				'comment': c.comment,
+			})
 
 		return ret
 
@@ -256,15 +340,29 @@ class WIFF:
 		ret = []
 		ret.append("%20s | %s" % ("File", d['file']))
 		ret.append("%20s | %s" % ("Description", d['description']))
+		ret.append("%20s | %s" % ("Start", d['start']))
+		ret.append("%20s | %s" % ("End", d['end']))
+		ret.append("%20s | %s" % ("fs", d['fs']))
+		ret.append("")
+		for c in d['channels']:
+			ret.append("%20s %d" % ('Channel', c['idx']))
+			ret.append("%25s | %s" % ('Name', c['name']))
+			ret.append("%25s | %s" % ('Bit', c['bit']))
+			ret.append("%25s | %s" % ('Unit', c['unit']))
+			ret.append("%25s | %s" % ('Comment', c['comment']))
 
-		return ret
+		return "\n".join(ret)
 
 	def dumps_json(self):
 		"""
 		Dump WIFF meta data into a json for handling within Python.
 		"""
 
-		return json.dumps(self.dumps_dict())
+		def dtconv(o):
+			if isinstance(o, datetime.datetime):
+				return o.strftime(DATE_FMT)
+
+		return json.dumps(self.dumps_dict(), default=dtconv)
 
 class WIFF_channels:
 	"""
@@ -303,6 +401,9 @@ class WIFF_channel:
 
 	def __repr__(self):
 		return "<WIFF_channel i=%d name='%s' bit=%d unit='%s' comment='%s'>" % (self._index, self.name, self.bit, self.unit, self.comment)
+
+	@property
+	def index(self): return self._index
 
 	@property
 	def name(self): return self._channels[self._index]['name']
@@ -349,8 +450,11 @@ class _WIFF_file:
 		return chunks
 
 	@classmethod
+	def AddChunk(cls, fname, dat):
+
+	@classmethod
 	def Ser(cls, magic, size, attrs):
-		fp = funpack.fpack(endian=funpack.Endianness.Big)
+		fp = funpack.fpack(endian=funpack.Endianness.Little)
 		fp.string_ascii(magic)
 		fp.u64(size)
 		fp.u8(*attrs)
@@ -359,7 +463,7 @@ class _WIFF_file:
 
 	@classmethod
 	def DeSer(cls, dat):
-		fup = funpack.funpack(dat, endian=funpack.Endianness.Big)
+		fup = funpack.funpack(dat, endian=funpack.Endianness.Little)
 
 		magic = fup.string_ascii(8)
 		size = fup.u64()
@@ -369,15 +473,15 @@ class _WIFF_file:
 
 class _WIFFINFO_header:
 	@classmethod
-	def Ser(cls, start, end, desc, fsamp, chans, files):
+	def Ser(cls, start, end, desc, fsamp, num_frames, chans, files):
 		b_start = start.encode('utf8')
 		b_end = end.encode('utf8')
 		b_desc = desc.encode('utf8')
 
-		fp = funpack.fpack(endian=funpack.Endianness.Big)
+		fp = funpack.fpack(endian=funpack.Endianness.Little)
 
-		# Start time at 18
-		idx = 18
+		# Start time at 26
+		idx = 2*9 + 8
 		fp.u16(idx)
 		idx += len(b_start)
 
@@ -395,7 +499,7 @@ class _WIFFINFO_header:
 		# Start offset for channel descriptions
 		chanidx = idx
 
-		fz = funpack.fpack(endian=funpack.Endianness.Big)
+		fz = funpack.fpack(endian=funpack.Endianness.Little)
 		for chan in chans:
 			b_name = chan['name'].encode('utf8')
 			b_unit = chan['unit'].encode('utf8')
@@ -426,7 +530,7 @@ class _WIFFINFO_header:
 
 		fileidx = chanidx
 
-		ff = funpack.fpack(endian=funpack.Endianness.Big)
+		ff = funpack.fpack(endian=funpack.Endianness.Little)
 		for fs in files:
 			b_name = fs['name'].encode('utf8')
 
@@ -458,6 +562,9 @@ class _WIFFINFO_header:
 		# Number of files
 		fp.u16(len(files))
 
+		# Number of frames
+		fp.u64(num_frames)
+
 		# Add in strings
 		fp.bytes(b_start)
 		fp.bytes(b_end)
@@ -473,7 +580,7 @@ class _WIFFINFO_header:
 
 	@classmethod
 	def DeSer(cls, dat):
-		fup = funpack.funpack(dat, endian=funpack.Endianness.Big)
+		fup = funpack.funpack(dat, endian=funpack.Endianness.Little)
 
 		idx_start = fup.u16()
 		idx_end = fup.u16()
@@ -484,6 +591,7 @@ class _WIFFINFO_header:
 		fs = fup.u16()
 		num_chan = fup.u16()
 		num_files = fup.u16()
+		num_frames = fup.u64()
 
 		s_start = fup.string_utf8(idx_end - idx_start)
 		s_end = fup.string_utf8(idx_desc - idx_end)
@@ -494,6 +602,7 @@ class _WIFFINFO_header:
 			'end': datetime.datetime.strptime(s_end, DATE_FMT),
 			'description': s_desc,
 			'fs': fs,
+			'num_frames': num_frames,
 			'channels': [],
 			'files': [],
 		}
@@ -529,4 +638,59 @@ class _WIFFINFO_header:
 			props['files'].append(f)
 
 		return props
+
+class _WIFFWAVE:
+	@classmethod
+	def Ser(cls, compression, segmentid, channels, fidx_start, fidx_end):
+		fp = funpack.fpack(endian=ENDIAN)
+
+		out = _WIFFWAVE_header.Ser(channels, fidx_start, fidx_end)
+
+
+		# Convert integer into 8-bit integers
+		segs = list(memoryview(struct.pack("<I", segmentid)))
+
+		# Form attributes tuple
+		attrs = [compression, 0,0,0] + segs
+
+		head = _WIFF_file.Ser('WIFFWAVE', len(out), tuple(attrs))
+
+
+		return head + out
+
+	@classmethod
+	def DeSer(cls, dat):
+		fup = funpack.funpack(dat, endian=ENDIAN)
+		raise NotImplementedError
+
+
+class _WIFFWAVE_header:
+	@classmethod
+	def Ser(cls, channels, fidx_start, fidx_end):
+		# Each channel index is a bit in 
+		cids = [chan.index for chan in channels]
+
+		# Set bits by channel index
+		z = bitfield()
+		z.set(cids)
+
+		fp.bytes(z.to_bytes())
+		fp.u64(fidx_start)
+		fp.u64(fidx_end)
+
+		return fp.Data
+
+	@classmethod
+	def DeSer(cls, dat):
+		fup = funpack.funpack(dat, endian=ENDIAN)
+
+		chans = fup.bytes(32)
+		z = bitfield.from_bytes(chans)
+		chans = z.set_indices()
+
+		return {
+			'channels': chans,
+			'fidx_start': fup.u64(),
+			'fidx_end': fup.u64(),
+		}
 
