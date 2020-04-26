@@ -1,5 +1,6 @@
 import functools
 import operator
+import struct
 
 class bitfield:
 	"""
