@@ -312,6 +312,7 @@ class WIFF:
 		self._current_segment = w
 
 	def add_frame(self, *samps):
+		print([len(samps), len(self._current_segment.channels)])
 		raise NotImplementedError
 
 	# -----------------------------------------------
