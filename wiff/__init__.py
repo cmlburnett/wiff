@@ -187,6 +187,8 @@ class WIFF:
 
 	@property
 	def num_frames(self): return self._chunks['INFO'].num_frames
+	@num_frames.setter
+	def num_frames(self, v): self._chunks['INFO'].num_frames = v
 
 	@property
 	def channels(self):
@@ -232,7 +234,7 @@ class WIFF:
 			'fidx_end': 0,
 		})
 
-		w = WIFFINFO(f, c, datoff)
+		w = WIFFINFO(self, f, c, datoff)
 		# Create the chunk and a header
 		w.initchunk()
 		w.initheader(props['start'],props['end'], props['description'], props['fs'], num_frames, props['channels'], props['files'])
@@ -254,7 +256,7 @@ class WIFF:
 		for chunk in chunks:
 			c = WIFF_chunk(f, chunk['offset header'])
 			if chunk['magic'] == 'WIFFINFO':
-				w = WIFFINFO(f, c, chunk['offset data'])
+				w = WIFFINFO(self, f, c, chunk['offset data'])
 				self._chunks[fname].append(w)
 
 				if 'INFO' in self._chunks:
@@ -268,16 +270,28 @@ class WIFF:
 	# Add data
 
 	def set_file(self, fname):
+		"""
+		Change the current segment
+		"""
 		self._current_file = self._files[fname]
 		self._current_segment = None
 
 	def set_segment(self, segmentid):
+		"""
+		Change the current segment
+		"""
 		raise NotImplementedError
 
 	def new_file(self, fname):
+		"""
+		Start a new WIFFWAVE file and segment in that file
+		"""
 		raise NotImplementedError
 
 	def new_segment(self, chans, segmentid=None):
+		"""
+		Start a new segment in the current file
+		"""
 		if self._current_file is None:
 			raise ValueError("Must set active file before creating a new segment")
 
@@ -302,7 +316,7 @@ class WIFF:
 		datoff = c.getoffset('data')
 
 		# Create chunk data
-		w = WIFFWAVE(self._current_file, c, datoff)
+		w = WIFFWAVE(self, self._current_file, c, datoff)
 		w.initchunk(None, segmentid)
 
 		# Create WAVE header
@@ -312,8 +326,10 @@ class WIFF:
 		self._current_segment = w
 
 	def add_frame(self, *samps):
-		print([len(samps), len(self._current_segment.channels)])
-		raise NotImplementedError
+		"""
+		Add a frame of samples to the current segment
+		"""
+		return self._current_segment.add_frame(*samps)
 
 	# -----------------------------------------------
 	# -----------------------------------------------
@@ -564,12 +580,13 @@ class WIFF_chunk:
 
 
 class WIFFINFO:
-	def __init__(self, fw, chunk, offset):
+	def __init__(self, wiff, fw, chunk, offset):
 		"""
 		Manage a WIFFINFO chunk using the _filewrap object @fw.
 		Supply the absolute offset @offset the chunk is located at in the file.
 		aLL OPErations are using an mmap and there is no caching.
 		"""
+		self.wiff = wiff
 		self.fw = fw
 		self.chunk = chunk
 		self.offset = offset
@@ -1121,7 +1138,8 @@ class WIFFINFO:
 		raise NotImplementedError
 
 class WIFFWAVE:
-	def __init__(self, fw, chunk, offset):
+	def __init__(self, wiff, fw, chunk, offset):
+		self.wiff = wiff
 		self.fw = fw
 		self.chunk = chunk
 		self.offset = offset
@@ -1157,7 +1175,7 @@ class WIFFWAVE:
 		Initiailizes a new chunk for this chunk type.
 		"""
 
-		self.chunk.magic = 'WIFFINFO'.encode('ascii')
+		self.chunk.magic = 'WIFFWAVE'.encode('ascii')
 		self.chunk.size = 4096
 		self.chunk.attributes = (0,0,0,0, 0,0,0,0)
 
@@ -1198,7 +1216,10 @@ class WIFFWAVE:
 	@property
 	def channels(self):
 		of = self.getoffset('channels')
-		return self.fw[of:of+32]
+		ret = self.fw[of:of+32]
+		b = bitfield.from_bytes(ret)
+		return b.set_indices()
+
 	@channels.setter
 	def channels(self, v):
 		of = self.getoffset('channels')
@@ -1212,7 +1233,7 @@ class WIFFWAVE:
 	@property
 	def fidx_start(self):
 		of = self.getoffset('fidx start')
-		return self.fw[of:of+8]
+		return struct.unpack("<Q", self.fw[of:of+8])[0]
 	@fidx_start.setter
 	def fidx_start(self, v):
 		of = self.getoffset('fidx start')
@@ -1226,7 +1247,7 @@ class WIFFWAVE:
 	@property
 	def fidx_end(self):
 		of = self.getoffset('fidx end')
-		return self.fw[of:of+8]
+		return struct.unpack("<Q", self.fw[of:of+8])[0]
 	@fidx_end.setter
 	def fidx_end(self, v):
 		of = self.getoffset('fidx end')
@@ -1236,4 +1257,48 @@ class WIFFWAVE:
 			self.fw[of:of+8] = v
 		else:
 			raise TypeError("Unsupported type: '%s'" % type(v))
+
+	def add_frame(self, *samps):
+		chans = self.channels
+
+		if len(chans) != len(samps):
+			raise ValueError("Mismatch between samples (%d) and number of channels (%d)" % (len(samps),len(chans)))
+
+		# Get channel objects
+		chans = [self.wiff.channels[_] for _ in chans]
+
+
+		# Expand to full bytes and check they match data size
+		chan_size = [c.bit + (c.bit%8) for c in chans]
+		for i in range(len(samps)):
+			if chan_size[i] != len(samps[i])*8:
+				raise ValueError("Sample for channel %d is %d bytes but channel is %d bytes (%d bits)" % (chans[i].index, len(samps[i]), chan_size[i], chans[i].bit))
+
+		# Total byte size of a frame
+		frame_size = sum(chan_size)//8
+
+		# Map frame into data block
+		off = self.getoffset('frames')
+		s = self.fidx_start
+		e = self.fidx_end
+		delta = e - s
+
+
+		# Determine frame number
+		frame_num = self.wiff.num_frames
+
+		# Fringe case of no frames, thus s == 0, e == 0, delta == 0
+		# and with 1 frame thus s == 0, e == 0, delta == 0 and frame 1 overwrites frames 0
+		# The differentiating factor between these cases is that num_frames is non-zero
+		if frame_num != 0:
+			delta += 1
+
+		off += delta * frame_size
+
+		self.fw[off:off+frame_size] = b''.join(samps)
+		if frame_num == 0:
+			self.fidx_start = frame_num
+		self.fidx_end = frame_num
+
+		self.wiff.num_frames += 1
 
