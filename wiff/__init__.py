@@ -196,7 +196,7 @@ class WIFF:
 
 	@property
 	def files(self):
-		return copy.deepcopy(self._props['files'])
+		return WIFF_files(self._chunks['INFO'])
 
 	def __enter__(self):
 		pass
@@ -340,6 +340,7 @@ class WIFF:
 		Dump WIFF meta data into a dict() for handling within Python.
 		"""
 		ret = {
+			'file': self._fname,
 			'start': self.start,
 			'end': self.end,
 			'description': self.description,
@@ -359,6 +360,14 @@ class WIFF:
 				'unit': c.unit,
 				'comment': c.comment,
 			})
+		for i in range(len(self.files)):
+			f = self.files[i]
+			ret['files'].append({
+				'idx': f.index,
+				'name': f.name,
+				'fidx start': f.fidx_start,
+				'fidx end': f.fidx_end,
+			})
 
 		return ret
 
@@ -375,6 +384,7 @@ class WIFF:
 		ret.append("%20s | %s" % ("Start", d['start']))
 		ret.append("%20s | %s" % ("End", d['end']))
 		ret.append("%20s | %s" % ("fs", d['fs']))
+		ret.append("%20s | %s" % ("Number of Frames", d['num_frames']))
 		ret.append("")
 		for c in d['channels']:
 			ret.append("%20s %d" % ('Channel', c['idx']))
@@ -382,6 +392,12 @@ class WIFF:
 			ret.append("%25s | %s" % ('Bit', c['bit']))
 			ret.append("%25s | %s" % ('Unit', c['unit']))
 			ret.append("%25s | %s" % ('Comment', c['comment']))
+		ret.append("")
+		for f in d['files']:
+			ret.append("%20s %d" % ('File', f['idx']))
+			ret.append("%25s | %s" % ('Name', f['name']))
+			ret.append("%25s | %s" % ('Frame Index Start', f['fidx start']))
+			ret.append("%25s | %s" % ('Frame Index End', f['fidx end']))
 
 		return "\n".join(ret)
 
@@ -435,7 +451,6 @@ class WIFF_channels:
 		self._w = w
 
 	def __getitem__(self, idx):
-		# Throw error if bad index
 		if type(idx) == slice:
 			return [WIFF_channel(self._w, _) for _ in range(len(self))[idx]]
 		else:
@@ -466,7 +481,7 @@ class WIFF_channel:
 	@property
 	def name(self): return self._w.channel_name(self._index)
 	@name.setter
-	def name(self, v): self._w.channel_name_set(self._indxex, v)
+	def name(self, v): self._w.channel_name_set(self._index, v)
 
 	@property
 	def bit(self): return self._w.channel_bit(self._index)
@@ -483,6 +498,56 @@ class WIFF_channel:
 	@comment.setter
 	def comment(self, v): self._w.channel_comment_set(self._index, v)
 
+class WIFF_files:
+	"""
+	Simple wrapper class to the files.
+	"""
+
+	def __init__(self, w):
+		self._w = w
+
+	def __getitem__(self, idx):
+		if type(idx) == slice:
+			return [WIFF_file(self._w, _) for _ in range(len(self))[idx]]
+		else:
+			return WIFF_file(self._w, idx)
+
+	def __len__(self):
+		return self._w.num_files
+
+	def __repr__(self):
+		return "<WIFF_files count=%d>" % len(self)
+
+class WIFF_file:
+	"""
+	Simple wrapper around file.
+	Permits getting and setting file properties.
+	"""
+
+	def __init__(self, w, index):
+		self._w = w
+		self._index = index
+
+	def __repr__(self):
+		return "<WIFF_file i=%d name='%s'>" % (self._index, self.name)
+
+	@property
+	def index(self): return self._index
+
+	@property
+	def name(self): return self._w.file_name(self._index)
+	@name.setter
+	def name(self, v): self._w.file_name_set(self._index, v)
+
+	@property
+	def fidx_start(self): return self._w.file_fidx_start(self._index)
+	@fidx_start.setter
+	def fidx_start(self, v): self._w.file_fidx_start_set(self._index, v)
+
+	@property
+	def fidx_end(self): return self._w.file_fidx_end(self._index)
+	@fidx_end.setter
+	def fidx_end(self, v): self._w.file_fidx_end_set(self._index, v)
 
 
 class _WIFF_file:
@@ -1121,21 +1186,47 @@ class WIFFINFO:
 		of_start = self.getoffset('file %d name start' % idx)
 		of_end = self.getoffset('file %d name end' % idx)
 
-		return self.fw[of_start:of_end].decode('utf8')
+		return self.fw[of_start:of_end+1].decode('utf8')
 	def file_name_set(self, idx, val):
 		raise NotImplementedError
 
 	def file_fidx_start(self, idx):
 		of = self.getoffset('index file %d fidx start' % idx)
-		return self.fw[of]
+		return struct.unpack("<Q", self.fw[of:of+8])[0]
 	def file_fidx_start_set(self, idx, val):
-		raise NotImplementedError
+		if type(idx) == str:
+			ln = self.num_files
+			for i in range(ln):
+				name = self.file_name(i)
+				if name == idx:
+					self.file_fidx_start_set(i, val)
+					return
+			raise ValueError("File '%s' not found in WIFFINFO file listing")
+		elif type(idx) == int:
+			of = self.getoffset('index file %d fidx start' % idx)
+			self.fw[of:of+8] = struct.pack("<Q", val)
+			return
+		else:
+			raise TypeError("Cannot set file '%s' fidx start to this type: %s" % (idx, type(idx)))
 
 	def file_fidx_end(self, idx):
 		of = self.getoffset('index file %d fidx end' % idx)
-		return self.fw[of]
+		return struct.unpack("<Q", self.fw[of:of+8])[0]
 	def file_fidx_end_set(self, idx, val):
-		raise NotImplementedError
+		if type(idx) == str:
+			ln = self.num_files
+			for i in range(ln):
+				name = self.file_name(i)
+				if name == idx:
+					self.file_fidx_end_set(i, val)
+					return
+			raise ValueError("File '%s' not found in WIFFINFO file listing")
+		elif type(idx) == int:
+			of = self.getoffset('index file %d fidx end' % idx)
+			self.fw[of:of+8] = struct.pack("<Q", val)
+			return
+		else:
+			raise TypeError("Cannot set file '%s' fidx end to this type: %s" % (idx, type(idx)))
 
 class WIFFWAVE:
 	def __init__(self, wiff, fw, chunk, offset):
@@ -1233,7 +1324,8 @@ class WIFFWAVE:
 	@property
 	def fidx_start(self):
 		of = self.getoffset('fidx start')
-		return struct.unpack("<Q", self.fw[of:of+8])[0]
+		ret = struct.unpack("<Q", self.fw[of:of+8])[0]
+		return ret
 	@fidx_start.setter
 	def fidx_start(self, v):
 		of = self.getoffset('fidx start')
@@ -1244,10 +1336,14 @@ class WIFFWAVE:
 		else:
 			raise TypeError("Unsupported type: '%s'" % type(v))
 
+		# Copy to WIFF
+		self.wiff._chunks['INFO'].file_fidx_start_set(self.fw.fname, v)
+
 	@property
 	def fidx_end(self):
 		of = self.getoffset('fidx end')
-		return struct.unpack("<Q", self.fw[of:of+8])[0]
+		ret = struct.unpack("<Q", self.fw[of:of+8])[0]
+		return ret
 	@fidx_end.setter
 	def fidx_end(self, v):
 		of = self.getoffset('fidx end')
@@ -1258,7 +1354,20 @@ class WIFFWAVE:
 		else:
 			raise TypeError("Unsupported type: '%s'" % type(v))
 
+		# Copy to WIFF
+		self.wiff._chunks['INFO'].file_fidx_end_set(self.fw.fname, v)
+
 	def add_frame(self, *samps):
+		"""
+		Add a frame of samples to the current segment.
+		This updates the frame index counters and number of frames.
+		"""
+		return self.add_frames(samps)
+
+	def add_frames(self, *frames):
+		#FIXME: just a temp
+		samps = frames[0]
+
 		chans = self.channels
 
 		if len(chans) != len(samps):
@@ -1300,5 +1409,5 @@ class WIFFWAVE:
 			self.fidx_start = frame_num
 		self.fidx_end = frame_num
 
-		self.wiff.num_frames += 1
+		self.wiff.num_frames = frame_num + 1
 
