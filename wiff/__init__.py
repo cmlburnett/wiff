@@ -150,10 +150,12 @@ import funpack
 
 from .bits import bitfield
 from .compress import WIFFCompress
+from .structs import chunk_struct, info_struct, channel_struct, file_struct, wave_struct
 
 DATE_FMT = "%Y%m%d %H%M%S.%f"
 WIFF_VERSION = 1
 ENDIAN = funpack.Endianness.Little
+
 
 class WIFF:
 	def __init__(self, fname, props=None):
@@ -186,17 +188,25 @@ class WIFF:
 	def description(self, v): self._chunks['INFO'].description = v
 
 	@property
+	def num_channels(self): return self._chunks['INFO'].num_channels
+	@num_channels.setter
+	def num_channels(self, v): self._chunks['INFO'].num_channels = v
+
+	@property
+	def num_files(self): return self._chunks['INFO'].num_files
+	@num_files.setter
+	def num_files(self, v): self._chunks['INFO'].num_files = v
+
+	@property
 	def num_frames(self): return self._chunks['INFO'].num_frames
 	@num_frames.setter
 	def num_frames(self, v): self._chunks['INFO'].num_frames = v
 
 	@property
-	def channels(self):
-		return WIFF_channels(self._chunks['INFO'])
+	def channels(self): return self._chunks['INFO'].channels
 
 	@property
-	def files(self):
-		return WIFF_files(self._chunks['INFO'])
+	def files(self): return self._chunks['INFO'].files
 
 	def __enter__(self):
 		pass
@@ -218,14 +228,13 @@ class WIFF:
 
 		# Wrap file
 		f = self._files[fname] = _filewrap(fname)
-		# Have to put something there as mmap cannot map an empty file
-		f[0:8] = 'WIFFINFO'.encode('ascii')
 
-		# Declare WIFFINO at the start of the file
 		c = WIFF_chunk(f, 0)
 
-		datoff = c.getoffset('data')
+		# Data starts after chunk header
+		datoff = c.offset + 24
 
+		# No frames yet
 		num_frames = 0
 
 		props['files'].append({
@@ -235,9 +244,9 @@ class WIFF:
 		})
 
 		w = WIFFINFO(self, f, c, datoff)
-		# Create the chunk and a header
 		w.initchunk()
-		w.initheader(props['start'],props['end'], props['description'], props['fs'], num_frames, props['channels'], props['files'])
+		w.initheader(props['start'], props['end'], props['description'], props['fs'], 0, props['channels'], props['files'])
+
 
 		self._chunks[fname] = [w]
 		self._chunks['INFO'] = w
@@ -313,7 +322,7 @@ class WIFF:
 
 		# Create new chunk
 		c = WIFF_chunk(self._current_file, nextoff)
-		datoff = c.getoffset('data')
+		datoff = c.offset + 24
 
 		# Create chunk data
 		w = WIFFWAVE(self, self._current_file, c, datoff)
@@ -351,22 +360,22 @@ class WIFF:
 			'segments': [],
 		}
 
-		for i in range(len(self.channels)):
+		for i in range(self.num_channels):
 			c = self.channels[i]
 			ret['channels'].append({
-				'idx': i,
-				'name': c.name,
-				'bit': c.bit,
-				'unit': c.unit,
-				'comment': c.comment,
+				'idx': c.index.val,
+				'name': c.name.val,
+				'bit': c.bit.val,
+				'unit': c.unit.val,
+				'comment': c.comment.val,
 			})
-		for i in range(len(self.files)):
+		for i in range(self.num_files):
 			f = self.files[i]
 			ret['files'].append({
-				'idx': f.index,
-				'name': f.name,
-				'fidx start': f.fidx_start,
-				'fidx end': f.fidx_end,
+				'idx': f.index.val,
+				'name': f.name.val,
+				'fidx start': f.fidx_start.val,
+				'fidx end': f.fidx_end.val,
 			})
 
 		return ret
@@ -440,116 +449,6 @@ class _filewrap:
 
 		self.mmap[k] = v
 
-class WIFF_channels:
-	"""
-	Simple wrapper class to the channels.
-	Implements the item getter pattern that returns WIFF_channel instances that then
-	 permits getting and setting channel properties.
-	"""
-
-	def __init__(self, w):
-		self._w = w
-
-	def __getitem__(self, idx):
-		if type(idx) == slice:
-			return [WIFF_channel(self._w, _) for _ in range(len(self))[idx]]
-		else:
-			return WIFF_channel(self._w, idx)
-
-	def __len__(self):
-		return self._w.num_channels
-
-	def __repr__(self):
-		return "<WIFF_channels count=%d>" % len(self)
-
-class WIFF_channel:
-	"""
-	Simple wrapper around channel dictionary.
-	Permits getting and setting channel properties.
-	"""
-
-	def __init__(self, w, index):
-		self._w = w
-		self._index = index
-
-	def __repr__(self):
-		return "<WIFF_channel i=%d name='%s' bit=%d unit='%s' comment='%s'>" % (self._index, self.name, self.bit, self.unit, self.comment)
-
-	@property
-	def index(self): return self._index
-
-	@property
-	def name(self): return self._w.channel_name(self._index)
-	@name.setter
-	def name(self, v): self._w.channel_name_set(self._index, v)
-
-	@property
-	def bit(self): return self._w.channel_bit(self._index)
-	@bit.setter
-	def bit(self, v): self._w.channel_bit_set(self._index, v)
-
-	@property
-	def unit(self): return self._w.channel_unit(self._index)
-	@unit.setter
-	def unit(self, v): self._w.channel_unit_set(self._index, v)
-
-	@property
-	def comment(self): return self._w.channel_comment(self._index)
-	@comment.setter
-	def comment(self, v): self._w.channel_comment_set(self._index, v)
-
-class WIFF_files:
-	"""
-	Simple wrapper class to the files.
-	"""
-
-	def __init__(self, w):
-		self._w = w
-
-	def __getitem__(self, idx):
-		if type(idx) == slice:
-			return [WIFF_file(self._w, _) for _ in range(len(self))[idx]]
-		else:
-			return WIFF_file(self._w, idx)
-
-	def __len__(self):
-		return self._w.num_files
-
-	def __repr__(self):
-		return "<WIFF_files count=%d>" % len(self)
-
-class WIFF_file:
-	"""
-	Simple wrapper around file.
-	Permits getting and setting file properties.
-	"""
-
-	def __init__(self, w, index):
-		self._w = w
-		self._index = index
-
-	def __repr__(self):
-		return "<WIFF_file i=%d name='%s'>" % (self._index, self.name)
-
-	@property
-	def index(self): return self._index
-
-	@property
-	def name(self): return self._w.file_name(self._index)
-	@name.setter
-	def name(self, v): self._w.file_name_set(self._index, v)
-
-	@property
-	def fidx_start(self): return self._w.file_fidx_start(self._index)
-	@fidx_start.setter
-	def fidx_start(self, v): self._w.file_fidx_start_set(self._index, v)
-
-	@property
-	def fidx_end(self): return self._w.file_fidx_end(self._index)
-	@fidx_end.setter
-	def fidx_end(self, v): self._w.file_fidx_end_set(self._index, v)
-
-
 class _WIFF_file:
 	@classmethod
 	def FindChunks(cls, f):
@@ -584,65 +483,27 @@ class _WIFF_file:
 
 class WIFF_chunk:
 	def __init__(self, fw, offset):
-		self.fw = fw
-		self.offset = offset
-
-	def getoffset(self, k):
-		return self.offset + self.getreloffset(k)
-
-	def getreloffset(self, k):
-		if k == 'magic':
-			return 0
-		elif k == 'size':
-			return 8
-		elif k == 'attributes':
-			return 16
-		elif k == 'data':
-			return 24
-		else:
-			raise ValueError("Unrecognized offset key '%s'" % k)
+		self._s = chunk_struct(fw, offset)
 
 	@property
-	def magic(self):
-		of = self.getoffset('magic')
-		return self.fw[of:of+8]
+	def offset(self): return self._s.offset
+
+	@property
+	def magic(self): return self._s.magic.val
 	@magic.setter
-	def magic(self, v):
-		of = self.getoffset('magic')
-		self.fw[of:of+8] = v
+	def magic(self, v): self._s.magic.val = v
 
 	@property
-	def size(self):
-		of = self.getoffset('size')
-		return struct.unpack("<Q", self.fw[of:of+8])[0]
+	def size(self): return self._s.size.val
 	@size.setter
-	def size(self, v):
-		of = self.getoffset('size')
-
-		if isinstance(v, bytes):
-			self.fw[of:of+8] = v
-		elif isinstance(v, int):
-			self.fw[of:of+8] = struct.pack("<Q", v)
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+	def size(self, v): self._s.size.val = v
 
 	@property
 	def attributes(self):
-		of = self.getoffset('attributes')
-		return struct.unpack("<BBBBBBBB", self.fw[of:of+8])
+		return struct.unpack("<BBBBBBBB", self._s.attributes.val)
 	@attributes.setter
 	def attributes(self, v):
-		of = self.getoffset('attributes')
-
-		if isinstance(v, bytes):
-			self.fw[of:of+8] = v
-		elif isinstance(v, int):
-			self.fw[of:of+8] = struct.pack("<Q", v)
-		elif isinstance(v, tuple):
-			self.fw[of:of+8] = struct.pack("<BBBBBBBB", *v)
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
-
+		self._s.attributes.val = struct.unpack("<Q", struct.pack("<BBBBBBBB", *v))[0]
 
 class WIFFINFO:
 	def __init__(self, wiff, fw, chunk, offset):
@@ -651,133 +512,21 @@ class WIFFINFO:
 		Supply the absolute offset @offset the chunk is located at in the file.
 		aLL OPErations are using an mmap and there is no caching.
 		"""
+		self._s = info_struct(fw, offset)
 		self.wiff = wiff
 		self.fw = fw
 		self.chunk = chunk
 		self.offset = offset
 
-	def getoffset(self, k):
-		"""
-		Gets the absolute offset of the field within the file.
-		Call getreloffset() to get the relative offset within a chunk.
-		"""
-		return self.offset + self.getreloffset(k)
-	def getreloffset(self, k):
-		"""
-		Important function that controls the offsets of fields within the file.
-		Often has to do indirect look up as well.
-		All returned values are relative to within the chunk.
-		Call getoffset() to add the absolute offset of the chunk within a file
-		 to get somethin that can be used in the mmap object.
-		"""
-
-		if k == 'index start':
-			return 0
-		elif k == 'index end':
-			return 2
-		elif k == 'index description':
-			return 4
-		elif k == 'index channels':
-			return 6
-		elif k == 'index files start':
-			return 8
-		elif k == 'index files end':
-			return 10
-		elif k == 'fs':
-			return 12
-		elif k == 'num channels':
-			return 14
-		elif k == 'num files':
-			return 16
-		elif k == 'num frames':
-			return 18
-
-		elif k.startswith('index channel '):
-			parts = k.split(' ')
-
-			if len(parts) == 3:
-				# k in ("index channel 1", "index channel 2" ... "index channel 255")
-				of = self.index_channels
-
-				# Get index (1,2,3.....255)
-				cnum = int(parts[2])
-
-				# Offset of the index for the channel definition
-				return of + 2*cnum
-			else:
-				of = self.getreloffset('channel %s' % parts[2])
-
-				if parts[3] == 'name':
-					return of
-				elif parts[3] == 'bit':
-					return of+2
-				elif parts[3] == 'unit':
-					return of+3
-				elif parts[3] == 'comment':
-					if parts[4] == 'start':
-						return of+5
-					elif parts[4] == 'end':
-						return of+7
-					else:
-						raise ValueError("Unrecognized offset key '%s'" % k)
-				else:
-					raise ValueError("Unrecognized offset key '%s'" % k)
-
-		elif k.startswith('channel '):
-			of = self.getoffset('index ' + k)
-			ret = struct.unpack("<H", self.fw[of:of+2])[0]
-			return ret
-
-		elif k.startswith('index file '):
-			parts = k.split(' ')
-
-			if len(parts) == 3:
-				# k in ("index file 1", "index file 2" ... "index file 255")
-				of = self.index_files_start
-
-				# Get index (1,2,3.....255)
-				cnum = int(k.split(' ')[2])
-
-				return of + 2*cnum
-			else:
-				of = self.getreloffset('file %s' % parts[2])
-
-				if parts[3] == 'name':
-					if parts[4] == 'start':
-						return of
-					elif parts[4] == 'end':
-						return of+2
-					else:
-						raise ValueError("Unrecognized offset key '%s'" % k)
-				elif parts[3] == 'fidx':
-					if parts[4] == 'start':
-						return of+4
-					elif parts[4] == 'end':
-						return of+12
-					else:
-						raise ValueError("Unrecognized offset key '%s'" % k)
-				else:
-					raise ValueError("Unrecognized offset key '%s'" % k)
-
-		elif k.startswith('file '):
-			of = self.getoffset('index ' + k)
-			ret = struct.unpack("<H", self.fw[of:of+2])[0]
-			return ret
-
-		elif k in ('start', 'end', 'description', 'channels', 'files'):
-			of = self.getoffset('index ' + k)
-			return struct.unpack("<H", self.fw[of:of+2])[0]
-		else:
-			raise ValueError("Unrecognized offset key '%s'" % k)
-
 	def initchunk(self):
 		"""
 		Initiailizes a new chunk for this chunk type.
 		"""
-		self.chunk.magic = 'WIFFINFO'.encode('ascii')
+		self.chunk.magic = 'WIFFINFO'
 		self.chunk.size = 4096
 		# Version 1
 		self.chunk.attributes = (1,0,0,0, 0,0,0,0)
+		self.fw[self.offset:self.offset+4096] = b'\0'*4096
 
 	def initheader(self, start, end, desc, fs, num_frames, channels, files):
 		"""
@@ -795,8 +544,8 @@ class WIFFINFO:
 		self.num_channels = len(channels)
 		self.num_files = len(files)
 
-		self.start = start
-		self.end = end
+		self.start = start.strftime(DATE_FMT)
+		self.end = end.strftime(DATE_FMT)
 		self.description = desc
 
 		# This also sets the index_files_start because it depends on length of the channels
@@ -805,468 +554,170 @@ class WIFFINFO:
 		# This also sets the indes_files_end
 		self.initfiles(files)
 
-		of_end = self.getreloffset('file %d name end' % (len(files)-1,))
-
-		# Index is last char of the file name, so one more is the next unusued space
-		of_end += 1
-
-		# Number of bytes left for a 4k block
-		padlen = 4096 - of_end
-
-		if padlen > 0:
-			# Now get absolute offset to pad
-			of_end = self.getoffset('file %d name end' % (len(files)-1,))
-			# Index is last char of the file name, so one more is the next unusued space
-			of_end += 1
-			self.fw[of_end:of_end+padlen] = b'\0'*padlen
 
 	def initchannels(self, chans):
-		# Get relative offset of the channels definition
-		cd_of = self.index_channels
-		ln = len(chans)
+		self.num_channels = len(chans)
 
-		# Length of the jump table (offset to first channel
-		jt_ln = 2*ln
-
-		prior_len = 0
-		prior_off = cd_of + jt_ln
+		# Size of the jumptable
+		strt = self._s.channels_jumptable.sizeof
 		for i in range(len(chans)):
-			of = self.getoffset('index channel %d' % i)
-
-			# Set channels definition jump table
-			if i == 0:
-				self.fw[of:of+2] = struct.pack("<H", cd_of + jt_ln)
-				prior_off = cd_of + jt_ln
-			else:
-				self.fw[of:of+2] = struct.pack("<H", prior_off + prior_len)
-				prior_off += prior_len
-
 			c = chans[i]
 
-			prior_len = self.initchannel(i, c['name'].encode('utf8'), c['bit'], c['unit'].encode('utf8'), c['comment'].encode('utf8'))
+			sz = channel_struct.lenplan(c['name'], c['unit'], c['comment'])
 
-		self.index_files_start = prior_off + prior_len
+			self._s.channels_jumptable[i] = (strt, strt+sz)
+			strt += sz
 
-	def initchannel(self, idx, name, bit, unit, comment):
-		of = self.getoffset('channel %d' % idx)
-		rel_of = self.getreloffset('channel %d' % idx)
+			self._s.channels[i].index.val = i
+			self._s.channels[i].index_name.val = 10
+			self._s.channels[i].index_unit.val = 10 + len(c['name'])
+			self._s.channels[i].index_comment_start.val = 10 + len(c['name']) + len(c['unit'])
+			self._s.channels[i].index_comment_end.val = 10 + len(c['name']) + len(c['unit']) + len(c['comment'])
 
-		self.fw[of+0 :of+2] = struct.pack("<H", rel_of+9)
-		self.fw[of+2 :of+3] = struct.pack("<B", bit)
-		self.fw[of+3 :of+5] = struct.pack("<H", rel_of+9 + len(name))
-		self.fw[of+5 :of+7] = struct.pack("<H", rel_of+9 + len(name) + len(unit))
-		# -1 because it points to the last character, not the spot after
-		self.fw[of+7 :of+9] = struct.pack("<H", rel_of+9 + len(name) + len(unit) + len(comment) -1)
+			self._s.channels[i].bit.val = c['bit']
 
-		off = of+9
-		self.fw[off:off+len(name)] = name
-		off += len(name)
-		self.fw[off:off+len(unit)] = unit
-		off += len(unit)
-		self.fw[off:off+len(comment)] = comment
-		off += len(comment)
+			self._s.channels[i].name.val = c['name']
+			self._s.channels[i].unit.val = c['unit']
+			self._s.channels[i].comment.val = c['comment']
 
-		ret = off - of
-		return ret
+		# Get the last byte used by the last entry as the start for the files
+		self.index_file_start = self._s.channels_jumptable[-1][1] + self._s.channels_jumptable.offset
+
 
 	def initfiles(self, files):
-		f_of = self.index_files_start
-		ln = len(files)
+		self.num_files = len(files)
 
-		# Length of the jump table (offset to first file)
-		jt_ln = 2*ln
-
-		prior_len = 0
-		prior_off = f_of + jt_ln
+		strt = self._s.files_jumptable.sizeof
 		for i in range(len(files)):
-			of = self.getoffset('index file %d' % i)
-
-			if i == 0:
-				self.fw[of:of+2] = struct.pack("<H", f_of + jt_ln)
-				prior_off = f_of + jt_ln
-			else:
-				self.fw[of:of+2] = struct.pack("<H", prior_off + jt_ln)
-				prior_off += prior_len
-
 			f = files[i]
 
-			prior_len = self.initfile(i, f['name'].encode('utf8'), f['fidx_start'], f['fidx_end'])
+			sz = file_struct.lenplan(f['name'])
 
-		# -1 because it points to the last character, not the spot after
-		self.index_files_end = prior_off + prior_len -1
+			self._s.files_jumptable[i] = (strt, strt+sz)
+			strt += sz
 
-	def initfile(self, idx, name, fidx_start, fidx_end):
-		of = self.getoffset('file %d' % idx)
-		rel_of = self.getreloffset('file %d' % idx)
+			self._s.files[i].index.val = i
+			self._s.files[i].index_name_start.val = 21
+			self._s.files[i].index_name_end.val = 21 + len(f['name'])
+			self._s.files[i].fidx_start.val = f['fidx_start']
+			self._s.files[i].fidx_end.val = f['fidx_end']
+			self._s.files[i].name.val = f['name']
 
-		self.fw[of+0 :of+2] = struct.pack("<H", rel_of+20)
-		# -1 because it points to the last character, not the spot after
-		self.fw[of+2 :of+4] = struct.pack("<H", rel_of+20 + len(name) -1)
-		self.fw[of+4 :of+12]= struct.pack("<Q", fidx_start)
-		self.fw[of+12:of+20]= struct.pack("<Q", fidx_end)
-
-		off = of+20
-		self.fw[off:off+len(name)] = name
-		off += len(name)
-
-		ret = off - of
-		return ret
+		# Get the last byte used for the files
+		self.index_file_end = self._s.files_jumptable[-1][1] + self._s.files_jumptable.offset
 
 	@property
-	def index_start(self):
-		of = self.getoffset('index start')
-		return struct.unpack("<H", self.fw[of:of+2])[0]
+	def index_start(self): return self._s.index_start.val
 	@index_start.setter
-	def index_start(self, v):
-		of = self.getoffset('index start')
-		if isinstance(v, bytes):
-			self.fw[of:of+2] = v
-		elif isinstance(v, int):
-			self.fw[of:of+2] = struct.pack("<H", v)
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+	def index_start(self, val): self._s.index_start.val = val
 
 	@property
-	def index_end(self):
-		of = self.getoffset('index end')
-		return struct.unpack("<H", self.fw[of:of+2])[0]
+	def index_end(self): return self._s.index_end.val
 	@index_end.setter
-	def index_end(self, v):
-		of = self.getoffset('index end')
-		if isinstance(v, bytes):
-			self.fw[of:of+2] = v
-		elif isinstance(v, int):
-			self.fw[of:of+2] = struct.pack("<H", v)
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+	def index_end(self, val): self._s.index_end.val = val
 
 	@property
-	def index_description(self):
-		of = self.getoffset('index description')
-		return struct.unpack("<H", self.fw[of:of+2])[0]
+	def index_description(self): return self._s.index_description.val
 	@index_description.setter
-	def index_description(self, v):
-		of = self.getoffset('index description')
-		if isinstance(v, bytes):
-			self.fw[of:of+2] = v
-		elif isinstance(v, int):
-			self.fw[of:of+2] = struct.pack("<H", v)
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+	def index_description(self, val): self._s.index_description.val = val
 
 	@property
-	def index_channels(self):
-		of = self.getoffset('index channels')
-		return struct.unpack("<H", self.fw[of:of+2])[0]
+	def index_channels(self): return self._s.index_channels.val
 	@index_channels.setter
-	def index_channels(self, v):
-		of = self.getoffset('index channels')
-		if isinstance(v, bytes):
-			self.fw[of:of+2] = v
-		elif isinstance(v, int):
-			self.fw[of:of+2] = struct.pack("<H", v)
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+	def index_channels(self, val): self._s.index_channels.val = val
 
 	@property
-	def index_files_start(self):
-		of = self.getoffset('index files start')
-		return struct.unpack("<H", self.fw[of:of+2])[0]
-	@index_files_start.setter
-	def index_files_start(self, v):
-		of = self.getoffset('index files start')
-		if isinstance(v, bytes):
-			self.fw[of:of+2] = v
-		elif isinstance(v, int):
-			self.fw[of:of+2] = struct.pack("<H", v)
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+	def index_file_start(self): return self._s.index_file_start.val
+	@index_file_start.setter
+	def index_file_start(self, val): self._s.index_file_start.val = val
 
 	@property
-	def index_files_end(self):
-		of = self.getoffset('index files end')
-		return struct.unpack("<H", self.fw[of:of+2])[0]
-	@index_files_end.setter
-	def index_files_end(self, v):
-		of = self.getoffset('index files end')
-		if isinstance(v, bytes):
-			self.fw[of:of+2] = v
-		elif isinstance(v, int):
-			self.fw[of:of+2] = struct.pack("<H", v)
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+	def index_file_end(self): return self._s.index_file_end.val
+	@index_file_end.setter
+	def index_file_end(self, val): self._s.index_file_end.val = val
 
 	@property
-	def fs(self):
-		of = self.getoffset('fs')
-		return struct.unpack("<H", self.fw[of:of+2])[0]
+	def fs(self): return self._s.fs.val
 	@fs.setter
-	def fs(self, v):
-		of = self.getoffset('fs')
-		if isinstance(v, bytes):
-			self.fw[of:of+2] = v
-		elif isinstance(v, int):
-			self.fw[of:of+2] = struct.pack("<H", v)
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+	def fs(self, val): self._s.fs.val = val
 
 	@property
-	def num_frames(self):
-		of = self.getoffset('num frames')
-		return struct.unpack("<H", self.fw[of:of+2])[0]
-	@num_frames.setter
-	def num_frames(self, v):
-		of = self.getoffset('num frames')
-		if isinstance(v, bytes):
-			self.fw[of:of+2] = v
-		elif isinstance(v, int):
-			self.fw[of:of+2] = struct.pack("<H", v)
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
-
-	@property
-	def num_channels(self):
-		of = self.getoffset('num channels')
-		return struct.unpack("<H", self.fw[of:of+2])[0]
+	def num_channels(self): return self._s.num_channels.val
 	@num_channels.setter
-	def num_channels(self, v):
-		of = self.getoffset('num channels')
-		if isinstance(v, bytes):
-			self.fw[of:of+2] = v
-		elif isinstance(v, int):
-			self.fw[of:of+2] = struct.pack("<H", v)
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+	def num_channels(self, val): self._s.num_channels.val = val
 
 	@property
-	def num_files(self):
-		of = self.getoffset('num files')
-		return struct.unpack("<H", self.fw[of:of+2])[0]
+	def num_files(self): return self._s.num_files.val
 	@num_files.setter
-	def num_files(self, v):
-		of = self.getoffset('num files')
-		if isinstance(v, bytes):
-			self.fw[of:of+2] = v
-		elif isinstance(v, int):
-			self.fw[of:of+2] = struct.pack("<H", v)
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+	def num_files(self, val): self._s.num_files.val = val
+
+	@property
+	def num_frames(self): return self._s.num_frames.val
+	@num_frames.setter
+	def num_frames(self, val): self._s.num_frames.val = val
 
 
 	@property
 	def start(self):
-		of_s = self.getoffset('start')
-		of_e = self.getoffset('end')
-
-		dat = self.fw[of_s:of_e].decode('utf8')
-		return datetime.datetime.strptime(dat, DATE_FMT)
+		return self._s.start.val
 	@start.setter
-	def start(self, v):
-		of_s = self.getoffset('start')
-		of_e = self.getoffset('end')
-
-		if isinstance(v, datetime.datetime):
-			v = v.strftime(DATE_FMT).encode('ascii')
-		elif isinstance(v, bytes):
-			pass
+	def start(self, val):
+		if isinstance(val, datetime.datetime):
+			val = val.strftime(DATE_FMT)
 		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+			pass
 
-		# Possiblities:
-		# 1) New value is same length as old
-		# 2) New value is smaller than old
-		# 3) New value is larger than old
-
-		curlen = of_e - of_s
-		print(['curlen', of_e, of_s, curlen, len(v)])
-
-		# (1)
-		if curlen == len(v):
-			self.fw[of_s:of_s+len(v)] = v
+		exist = self.index_end - self.index_start
+		if len(val) == exist:
+			self._s.start.val = val
 		else:
 			raise NotImplementedError
 
 	@property
 	def end(self):
-		of_s = self.getoffset('end')
-		of_e = self.getoffset('description')
-
-		dat = self.fw[of_s:of_e].decode('utf8')
-		return datetime.datetime.strptime(dat, DATE_FMT)
+		return self._s.end.val
 	@end.setter
-	def end(self, v):
-		of_e = self.getoffset('end')
-		of_d = self.getoffset('description')
-
-		if isinstance(v, datetime.datetime):
-			v = v.strftime(DATE_FMT).encode('ascii')
-		elif isinstance(v, bytes):
-			pass
+	def end(self, val):
+		if isinstance(val, datetime.datetime):
+			val = val.strftime(DATE_FMT)
 		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+			pass
 
-		# Possiblities:
-		# 1) New value is same length as old
-		# 2) New value is smaller than old
-		# 3) New value is larger than old
-
-		curlen = of_d - of_e
-		print(['curlen', of_d, of_e, curlen, len(v)])
-
-		# (1)
-		if curlen == len(v):
-			self.fw[of_e:of_e+len(v)] = v
+		if len(val) == len(self._s.end.val):
+			self._s.end.val = val
 		else:
 			raise NotImplementedError
 
 	@property
 	def description(self):
-		of_s = self.getoffset('description')
-		of_e = self.getoffset('channels')
-
-		return self.fw[of_s:of_e].decode('utf8')
+		return self._s.description.val
 	@description.setter
-	def description(self, v):
-		of_d = self.getoffset('description')
-		of_cd = self.getoffset('channels')
-
-		if isinstance(v, str):
-			v = v.encode('ascii')
-		elif isinstance(v, bytes):
-			pass
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
-
-		# Possiblities:
-		# 1) New value is same length as old
-		# 2) New value is smaller than old
-		# 3) New value is larger than old
-
-		curlen = of_cd - of_d
-		print(['curlen', of_cd, of_d, curlen, len(v)])
-
-		# (1)
-		if curlen == len(v):
-			self.fw[of_d:of_d+len(v)] = v
+	def description(self, val):
+		if len(val) == len(self._s.description.val):
+			self._s.description.val = val
 		else:
 			raise NotImplementedError
 
-	def channel_name(self, idx):
-		of_start = self.getoffset('channel %d name' % idx)
-		of_end = self.getoffset('channel %d unit' % idx)
+	@property
+	def channels(self): return self._s.channels
 
-		return self.fw[of_start:of_end].decode('utf8')
-	def channel_name_set(self, idx, val):
-		raise NotImplementedError
-
-	def channel_bit(self, idx):
-		of = self.getoffset('index channel %d bit' % idx)
-		return self.fw[of]
-	def channel_bit_set(self, idx, val):
-		raise NotImplementedError
-
-	def channel_unit(self, idx):
-		of_start = self.getoffset('channel %d unit' % idx)
-		of_end = self.getoffset('channel %d comment start' % idx)
-
-		return self.fw[of_start:of_end].decode('utf8')
-	def channel_unit_set(self, idx, val):
-		raise NotImplementedError
-
-	def channel_comment(self, idx):
-		of_start = self.getoffset('channel %d comment start' % idx)
-		of_end = self.getoffset('channel %d comment end' % idx)
-
-		# end points to the last character, so must go 1 more
-		return self.fw[of_start:of_end+1].decode('utf8')
-	def channel_comment_set(self, idx, val):
-		raise NotImplementedError
-
-	def file_name(self, idx):
-		of_start = self.getoffset('file %d name start' % idx)
-		of_end = self.getoffset('file %d name end' % idx)
-
-		return self.fw[of_start:of_end+1].decode('utf8')
-	def file_name_set(self, idx, val):
-		raise NotImplementedError
-
-	def file_fidx_start(self, idx):
-		of = self.getoffset('index file %d fidx start' % idx)
-		return struct.unpack("<Q", self.fw[of:of+8])[0]
-	def file_fidx_start_set(self, idx, val):
-		if type(idx) == str:
-			ln = self.num_files
-			for i in range(ln):
-				name = self.file_name(i)
-				if name == idx:
-					self.file_fidx_start_set(i, val)
-					return
-			raise ValueError("File '%s' not found in WIFFINFO file listing")
-		elif type(idx) == int:
-			of = self.getoffset('index file %d fidx start' % idx)
-			self.fw[of:of+8] = struct.pack("<Q", val)
-			return
-		else:
-			raise TypeError("Cannot set file '%s' fidx start to this type: %s" % (idx, type(idx)))
-
-	def file_fidx_end(self, idx):
-		of = self.getoffset('index file %d fidx end' % idx)
-		return struct.unpack("<Q", self.fw[of:of+8])[0]
-	def file_fidx_end_set(self, idx, val):
-		if type(idx) == str:
-			ln = self.num_files
-			for i in range(ln):
-				name = self.file_name(i)
-				if name == idx:
-					self.file_fidx_end_set(i, val)
-					return
-			raise ValueError("File '%s' not found in WIFFINFO file listing")
-		elif type(idx) == int:
-			of = self.getoffset('index file %d fidx end' % idx)
-			self.fw[of:of+8] = struct.pack("<Q", val)
-			return
-		else:
-			raise TypeError("Cannot set file '%s' fidx end to this type: %s" % (idx, type(idx)))
+	@property
+	def files(self): return self._s.files
 
 class WIFFWAVE:
 	def __init__(self, wiff, fw, chunk, offset):
+		self._s = wave_struct(fw, offset)
 		self.wiff = wiff
 		self.fw = fw
 		self.chunk = chunk
 		self.offset = offset
-
-	def getoffset(self, k):
-		"""
-		Gets the absolute offset of the field within the file.
-		Call getreloffset() to get the relative offset within a chunk.
-		"""
-		return self.offset + self.getreloffset(k)
-	def getreloffset(self, k):
-		"""
-		Important function that controls the offsets of fields within the file.
-		Often has to do indirect look up as well.
-		All returned values are relative to within the chunk.
-		Call getoffset() to add the absolute offset of the chunk within a file
-		 to get somethin that can be used in the mmap object.
-		"""
-
-		if k == 'channels':
-			return 0
-		elif k == 'fidx start':
-			return 32
-		elif k == 'fidx end':
-			return 40
-		elif k == 'frames':
-			return 48
-		else:
-			raise ValueError("Unrecognized offset key '%s'" % k)
 
 	def initchunk(self, compression, segmentid):
 		"""
 		Initiailizes a new chunk for this chunk type.
 		"""
 
-		self.chunk.magic = 'WIFFWAVE'.encode('ascii')
+		self.chunk.magic = 'WIFFWAVE'
 		self.chunk.size = 4096
 		self.chunk.attributes = (0,0,0,0, 0,0,0,0)
 
@@ -1290,7 +741,7 @@ class WIFFWAVE:
 		"""
 
 		# Get just the indices
-		indices = [c.index for c in channels]
+		indices = [c.index.val for c in channels]
 		# Make a bitfield of it
 		b = bitfield()
 		# Make 256 bits wide
@@ -1304,58 +755,58 @@ class WIFFWAVE:
 		self.fidx_start = fidx_start
 		self.fidx_end = fidx_end
 
+		# Expand to full bytes and check they match data size
+		chan_size = [c.bit.val + (c.bit.val%8) for c in channels]
+
+		# Total byte size of a frame
+		frame_size = sum(chan_size)//8
+
+		# Set frame size
+		self._s.records.size = frame_size
+
 	@property
 	def channels(self):
-		of = self.getoffset('channels')
-		ret = self.fw[of:of+32]
-		b = bitfield.from_bytes(ret)
+		b = bitfield.from_bytes(self._s.channels[0:32])
 		return b.set_indices()
 
 	@channels.setter
 	def channels(self, v):
-		of = self.getoffset('channels')
 		if isinstance(v, tuple):
-			self.fw[of:of+32] = struct.pack("<" + "B"*32, *v)
+			self._s.channels[0:32] = v
 		elif isinstance(v, bytes):
-			self.fw[of:of+32] = v
+			self._s.channels[0:32] = v
 		else:
 			raise TypeError("Unsupported type: '%s'" % type(v))
 
 	@property
-	def fidx_start(self):
-		of = self.getoffset('fidx start')
-		ret = struct.unpack("<Q", self.fw[of:of+8])[0]
-		return ret
+	def fidx_start(self): return self._s.fidx_start.val
 	@fidx_start.setter
 	def fidx_start(self, v):
-		of = self.getoffset('fidx start')
-		if isinstance(v, int):
-			self.fw[of:of+8] = struct.pack("<Q", v)
-		elif isinstance(v, bytes):
-			self.fw[of:of+8] = v
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+		self._s.fidx_start.val = v
 
 		# Copy to WIFF
-		self.wiff._chunks['INFO'].file_fidx_start_set(self.fw.fname, v)
+		fs = self.wiff._chunks['INFO'].files
+		for f in fs:
+			if f.name.val == self.fw.fname:
+				f.fidx_start.val = v
+				return
+
+		raise IndexError("File not found by name '%s'" % self.fw.fname)
 
 	@property
-	def fidx_end(self):
-		of = self.getoffset('fidx end')
-		ret = struct.unpack("<Q", self.fw[of:of+8])[0]
-		return ret
+	def fidx_end(self): return self._s.fidx_end.val
 	@fidx_end.setter
 	def fidx_end(self, v):
-		of = self.getoffset('fidx end')
-		if isinstance(v, int):
-			self.fw[of:of+8] = struct.pack("<Q", v)
-		elif isinstance(v, bytes):
-			self.fw[of:of+8] = v
-		else:
-			raise TypeError("Unsupported type: '%s'" % type(v))
+		self._s.fidx_end.val = v
 
 		# Copy to WIFF
-		self.wiff._chunks['INFO'].file_fidx_end_set(self.fw.fname, v)
+		fs = self.wiff._chunks['INFO'].files
+		for f in fs:
+			if f.name.val == self.fw.fname:
+				f.fidx_end.val = v
+				return
+
+		raise IndexError("File not found by name '%s'" % self.fw.fname)
 
 	def add_frame(self, *samps):
 		"""
@@ -1378,7 +829,7 @@ class WIFFWAVE:
 
 
 		# Expand to full bytes and check they match data size
-		chan_size = [c.bit + (c.bit%8) for c in chans]
+		chan_size = [c.bit.val + (c.bit.val%8) for c in chans]
 		for i in range(len(samps)):
 			if chan_size[i] != len(samps[i])*8:
 				raise ValueError("Sample for channel %d is %d bytes but channel is %d bytes (%d bits)" % (chans[i].index, len(samps[i]), chan_size[i], chans[i].bit))
@@ -1387,7 +838,6 @@ class WIFFWAVE:
 		frame_size = sum(chan_size)//8
 
 		# Map frame into data block
-		off = self.getoffset('frames')
 		s = self.fidx_start
 		e = self.fidx_end
 		delta = e - s
@@ -1402,9 +852,9 @@ class WIFFWAVE:
 		if frame_num != 0:
 			delta += 1
 
-		off += delta * frame_size
+		# Assign frame
+		self._s.records[delta] = b''.join(samps)
 
-		self.fw[off:off+frame_size] = b''.join(samps)
 		if frame_num == 0:
 			self.fidx_start = frame_num
 		self.fidx_end = frame_num
