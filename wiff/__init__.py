@@ -603,9 +603,12 @@ class WIFFINFO:
 			self._s.files_jumptable[i] = (strt, strt+sz)
 			strt += sz
 
+
+			off = file_struct.lenplan("")
+
 			self._s.files[i].index.val = i
-			self._s.files[i].index_name_start.val = 21
-			self._s.files[i].index_name_end.val = 21 + len(f['name'])
+			self._s.files[i].index_name_start.val = off
+			self._s.files[i].index_name_end.val = off + len(f['name'])
 			self._s.files[i].fidx_start.val = f['fidx_start']
 			self._s.files[i].fidx_end.val = f['fidx_end']
 			self._s.files[i].name.val = f['name']
