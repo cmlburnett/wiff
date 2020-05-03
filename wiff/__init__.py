@@ -191,6 +191,24 @@ DATE_FMT = "%Y%m%d %H%M%S.%f"
 WIFF_VERSION = 1
 
 class WIFF:
+	"""
+	Primary interface class to a WIFF recording.
+	All interactions should occur through this class.
+	Supply the primary WIFF file that contains the information for the recording
+	If creating a new file, properties in @props is needed to start the recording.
+
+	@props -- dictionary including:
+		'start'			datetime objects
+		'end'			datetime objects
+		'description'	string describing the recording
+		'fs'			sampling frequency (int)
+		'channels'		list of channels
+			'name'			name of the channel
+			'bit'			bits (int) of each measurement
+			'unit'			physical units of the measurement (str)
+			'comment'		Arbitrary comment on the channel
+		'files'			list of files, probably empty for a new recording
+	"""
 	def __init__(self, fname, props=None):
 		self._files = {}
 		self._chunks = {}
@@ -294,7 +312,7 @@ class WIFF:
 		# Wrap file
 		f = self._files[fname] = _filewrap(fname)
 
-		chunks = _WIFF_file.FindChunks(f.f)
+		chunks = WIFF.FindChunks(f.f)
 		for chunk in chunks:
 			c = WIFF_chunk(f, chunk['offset header'])
 			if chunk['magic'] == 'WIFFINFO':
@@ -302,7 +320,7 @@ class WIFF:
 				self._chunks[fname].append(w)
 
 				if 'INFO' in self._chunks:
-					raise NotImplementedError
+					raise NotImplementedError("Multiple WAVEINFO chunks is not supported")
 				self._chunks['INFO'] = w
 			elif chunk['magic'] == 'WIFFWAVE':
 				w = WIFFWAVE(self, f, c)
@@ -310,6 +328,41 @@ class WIFF:
 
 			else:
 				raise TypeError('Uknown chunk magic: %s' % chunk['magic'])
+
+	@classmethod
+	def FindChunks(cls, f):
+		sz = os.path.getsize(f.name)
+
+		chunks = []
+
+		off = 0
+		while off < sz:
+			f.seek(off)
+
+			p = {
+				'magic': f.read(8).decode('utf8'),
+				'size': None,
+				'attrs': None,
+			}
+
+			dat = f.read(8)
+			sz = struct.unpack("<Q", dat)[0]
+			if sz == 0:
+				raise ValueError("Found zero length chunk, non-sensical")
+			p['size'] = sz
+
+			dat = f.read(8)
+			p['attrs'] = struct.unpack("<BBBBBBBB", dat)
+
+			# Include offsets
+			p['offset header'] = off
+			p['offset data'] = off + 24
+
+			chunks.append(p)
+			off += p['size']
+
+		return chunks
+
 
 	# -----------------------------------------------
 	# -----------------------------------------------
@@ -460,9 +513,15 @@ class WIFF:
 		return json.dumps(self.dumps_dict(), default=dtconv)
 
 class _filewrap:
+	"""
+	Internal file wrapper that memory maps (mmap) the file.
+	This provides index access to the file.
+	"""
 	def __init__(self, fname):
+		""" Wrap the file with name @fname """
 		if not os.path.exists(fname):
 			f = open(fname, 'wb')
+			# Have to write something to memory map it
 			f.write(b'0')
 			f.close()
 
@@ -472,67 +531,44 @@ class _filewrap:
 		self.size = os.path.getsize(fname)
 
 	def resize(self, sz):
+		"""Change the size of the memory map and the file"""
 		self.mmap.resize(sz)
 		self.size = os.path.getsize(self.fname)
 	def resize_add(self, delta):
+		"""Add bytes to the existing size"""
 		self.resize(self.size + delta)
 
 	def __getitem__(self, k):
+		"""
+		Supply an integer or slice to get binary data
+		"""
 		return self.mmap[k]
 
 	def __setitem__(self, k,v):
+		"""
+		Supply an integer or slice and binary data.
+		If the data is beyond the file size, NeedResizeException is thrown
+		"""
 		# Resize map and file upward as needed
 		if isinstance(k, slice):
 			if k.stop > self.size:
 				raise NeedResizeException
-				#self.mmap.resize(k.stop + 4096)
-				#self.size = os.path.getsize(self.fname)
 		else:
 			if k > self.size:
 				raise NeedResizeException
-				#self.mmap.resize(k + 4096)
-				#self.size = os.path.getsize(self.fname)
 
 		self.mmap[k] = v
 
-class NeedResizeException(Exception): pass
-
-class _WIFF_file:
-	@classmethod
-	def FindChunks(cls, f):
-		sz = os.path.getsize(f.name)
-
-		chunks = []
-
-		off = 0
-		while off < sz:
-			f.seek(off)
-
-			p = {
-				'magic': f.read(8).decode('utf8'),
-				'size': None,
-				'attrs': None,
-			}
-
-			dat = f.read(8)
-			sz = struct.unpack("<Q", dat)[0]
-			if sz == 0:
-				raise ValueError("Found zero length chunk, non-sensical")
-			p['size'] = sz
-
-			dat = f.read(8)
-			p['attrs'] = struct.unpack("<BBBBBBBB", dat)
-
-			# Include offsets
-			p['offset header'] = off
-			p['offset data'] = off + 24
-
-			chunks.append(p)
-			off += p['size']
-
-		return chunks
+class NeedResizeException(Exception):
+	"""
+	Exception thrown when the underlying file is too small and should be resized.
+	"""
+	pass
 
 class WIFF_chunk:
+	"""
+	Helper class to interface with chunk headers.
+	"""
 	def __init__(self, fw, offset):
 		self._s = chunk_struct(fw, offset)
 
@@ -564,6 +600,11 @@ class WIFF_chunk:
 
 
 class WIFFINFO:
+	"""
+	Helper class that interfaces the data portion of a WIFFINFO chunk.
+	This chunk includes all of the meta data about the recording (start time, end time, sampling frequency, etc).
+	"""
+
 	def __init__(self, wiff, fw, chunk):
 		"""
 		Manage a WIFFINFO chunk using the _filewrap object @fw.
@@ -609,13 +650,13 @@ class WIFFINFO:
 		self.description = desc
 
 		# This also sets the index_files_start because it depends on length of the channels
-		self.initchannels(channels)
+		self._initchannels(channels)
 
 		# This also sets the indes_files_end
-		self.initfiles(files)
+		self._initfiles(files)
 
 
-	def initchannels(self, chans):
+	def _initchannels(self, chans):
 		self.num_channels = len(chans)
 
 		# Size of the jumptable
@@ -646,7 +687,7 @@ class WIFFINFO:
 		self.index_file_start = self._s.channels_jumptable[-1][1] + self._s.channels_jumptable.offset
 
 
-	def initfiles(self, files):
+	def _initfiles(self, files):
 		self.num_files = len(files)
 
 		strt = self._s.files_jumptable.sizeof
@@ -770,6 +811,11 @@ class WIFFINFO:
 	def files(self): return self._s.files
 
 class WIFFWAVE:
+	"""
+	Helper class that interfaces the data portion of a WIFFWAVE chunk.
+	This chunk includes the raw binary data in the recording.
+	"""
+
 	def __init__(self, wiff, fw, chunk):
 		self.wiff = wiff
 		self.fw = fw
