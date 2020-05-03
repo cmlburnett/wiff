@@ -32,7 +32,7 @@ Assumptions
 WIFF chunk format
 	Offset	Length	Contents
 	0		8		Chunk ID in ASCII characters
-	8		8		Size of chunk not including the header
+	8		8		Size of chunk including the header
 	16		8		Attribute flags unique to each chunk that can be used as needed
 					Could be 32 one-bit flags, or 8 unsigned bytes, or whatever
 					Regardless, all chunks have these 8 attribute bytes.
@@ -229,6 +229,8 @@ class WIFF:
 
 		# Wrap file
 		f = self._files[fname] = _filewrap(fname)
+		# Initial 4096 block
+		f.resize(4096)
 
 		c = WIFF_chunk(f, 0)
 
@@ -270,6 +272,10 @@ class WIFF:
 				if 'INFO' in self._chunks:
 					raise NotImplementedError
 				self._chunks['INFO'] = w
+			elif chunk['magic'] == 'WIFFWAVE':
+				w = WIFFWAVE(self, f, c)
+				self._chunks[fname].append(w)
+
 			else:
 				raise TypeError('Uknown chunk magic: %s' % chunk['magic'])
 
@@ -321,10 +327,11 @@ class WIFF:
 
 		# Create new chunk
 		c = WIFF_chunk(self._current_file, nextoff)
-		datoff = c.offset + 24
 
 		# Create chunk data
-		w = WIFFWAVE(self, self._current_file, c, datoff)
+		self._current_file.resize_add(4096)
+		w = WIFFWAVE(self, self._current_file, c)
+		cs.append(w)
 		w.initchunk(None, segmentid)
 
 		# Create WAVE header
@@ -432,6 +439,12 @@ class _filewrap:
 		self.mmap = mmap.mmap(self.f.fileno(), 0)
 		self.size = os.path.getsize(fname)
 
+	def resize(self, sz):
+		self.mmap.resize(sz)
+		self.size = os.path.getsize(self.fname)
+	def resize_add(self, delta):
+		self.resize(self.size + delta)
+
 	def __getitem__(self, k):
 		return self.mmap[k]
 
@@ -439,14 +452,18 @@ class _filewrap:
 		# Resize map and file upward as needed
 		if isinstance(k, slice):
 			if k.stop > self.size:
-				self.mmap.resize(k.stop)
-				self.size = os.path.getsize(self.fname)
+				raise NeedResizeException
+				#self.mmap.resize(k.stop + 4096)
+				#self.size = os.path.getsize(self.fname)
 		else:
 			if k > self.size:
-				self.mmap.resize(k)
-				self.size = os.path.getsize(self.fname)
+				raise NeedResizeException
+				#self.mmap.resize(k + 4096)
+				#self.size = os.path.getsize(self.fname)
 
 		self.mmap[k] = v
+
+class NeedResizeException(Exception): pass
 
 class _WIFF_file:
 	@classmethod
@@ -466,7 +483,10 @@ class _WIFF_file:
 			}
 
 			dat = f.read(8)
-			p['size'] = struct.unpack("<Q", dat)[0]
+			sz = struct.unpack("<Q", dat)[0]
+			if sz == 0:
+				raise ValueError("Found zero length chunk, non-sensical")
+			p['size'] = sz
 
 			dat = f.read(8)
 			p['attrs'] = struct.unpack("<BBBBBBBB", dat)
@@ -476,7 +496,7 @@ class _WIFF_file:
 			p['offset data'] = off + 24
 
 			chunks.append(p)
-			off += p['size'] + 24 # Add header size
+			off += p['size']
 
 		return chunks
 
@@ -535,7 +555,6 @@ class WIFFINFO:
 		self.chunk.size = 4096
 		# Version 1
 		self.chunk.attributes = (1,0,0,0, 0,0,0,0)
-		self.fw[self.offset:self.offset+4096] = b'\0'*4096
 
 	def initheader(self, start, end, desc, fs, num_frames, channels, files):
 		"""
@@ -719,12 +738,11 @@ class WIFFINFO:
 	def files(self): return self._s.files
 
 class WIFFWAVE:
-	def __init__(self, wiff, fw, chunk, offset):
-		self._s = wave_struct(fw, offset)
+	def __init__(self, wiff, fw, chunk):
 		self.wiff = wiff
 		self.fw = fw
 		self.chunk = chunk
-		self.offset = offset
+		self._s = wave_struct(fw, chunk.data_offset)
 
 	def initchunk(self, compression, segmentid):
 		"""
@@ -762,8 +780,6 @@ class WIFFWAVE:
 		b.clear(255)
 		b.set(*indices)
 		bs = b.to_bytes()
-
-		of = self.offset
 
 		self.channels = bs
 		self.fidx_start = fidx_start
@@ -867,7 +883,12 @@ class WIFFWAVE:
 			delta += 1
 
 		# Assign frame
-		self._s.records[delta] = b''.join(samps)
+		try:
+			self._s.records[delta] = b''.join(samps)
+		except NeedResizeException:
+			self.chunk.size += 4096
+			self._s.fw.resize_add(4096)
+			self._s.records[delta] = b''.join(samps)
 
 		if frame_num == 0:
 			self.fidx_start = frame_num
