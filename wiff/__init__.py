@@ -121,8 +121,6 @@ Chunks
 				 Chunk ID's need not be in numerical order, only unique within the same WIFF data set.
 				 Putting segment ID in attributes avoids having to decompress data first.
 
-	If compression is used, the entire data block, except padding bytes, are decompressed first.
-
 	Data
 		[0:31] -- Bitfield identifying which channels are present from 0 to 255
 		[32:39] -- First frame index
@@ -138,10 +136,44 @@ Chunks
 			Z			zlib
 			B			bzip2
 
-	If compression is used, the entire data block, except padding bytes, are decompressed first.
-
 	Annotations
+		[0:7] -- First annotation index
+		[8:15] -- Last annotation index
+		[16:X-1] -- Annotation jump table
+		[X:Y] -- Annotation definitions
 
+	Annotations have different types with variable content each.
+	Markers are character codes that apply to a single frame or a range of frames.
+	Comments are freetext of variable length that add commentary to a single frame or a range of frames.
+
+	Markers are intended to identify repeating types in the data (eg, with ECG the beat type or the frame range of the QRS complex). Comments are meant to be typed in by a user to signify something unusual not easily achieved by the marker type and may be out-of-band information (eg, manual blood pressure reading when recording ECG, medication administration).
+
+	Annotation
+		[0] -- Annotation type
+		[1:8] -- Frame index start
+		[9:15] -- Frame index end
+		[16:X] -- Annotation data
+
+	Annotation: comment ('C')
+		[0]='C' -- Commentannotation
+		[1:8] -- Frame index start
+		[9:15] -- Frame index end
+		[16:18] -- Comment start byte index
+		[19:20] -- Comment end byte index
+		[21:X] -- Comment
+
+	Annotation: marker ('M')
+		[0]='M' -- Marker annotation
+		[1:8] -- Frame index start
+		[9:15] -- Frame index end
+		[16:19] -- 4 character marker
+
+	Annotation: marker with data ('D')
+		[0]='D' -- Data marker annotation
+		[1:8] -- Frame index start
+		[9:15] -- Frame index end
+		[16:19] -- 4 character marker
+		[20:27] -- 8 byte data value associated with the marker
 
 """
 
@@ -818,6 +850,9 @@ class WIFFWAVE:
 		fs = self.wiff._chunks['INFO'].files
 		for f in fs:
 			if f.name.val == self.fw.fname:
+				# only update if start is earlier
+				# Eg, adding a second segment to the same file has a different
+				# start frame index, so don't update if larger than the existing frame index
 				if v < f.fidx_start.val:
 					f.fidx_start.val = v
 				return
