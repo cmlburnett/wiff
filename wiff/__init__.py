@@ -158,7 +158,6 @@ from .structs import chunk_struct, info_struct, channel_struct, file_struct, wav
 DATE_FMT = "%Y%m%d %H%M%S.%f"
 WIFF_VERSION = 1
 
-
 class WIFF:
 	def __init__(self, fname, props=None):
 		self._files = {}
@@ -233,9 +232,6 @@ class WIFF:
 
 		c = WIFF_chunk(f, 0)
 
-		# Data starts after chunk header
-		datoff = c.offset + 24
-
 		# No frames yet
 		num_frames = 0
 
@@ -245,7 +241,8 @@ class WIFF:
 			'fidx_end': 0,
 		})
 
-		w = WIFFINFO(self, f, c, datoff)
+		c = WIFF_chunk(f, 0)
+		w = WIFFINFO(self, f, c)
 		w.initchunk()
 		w.initheader(props['start'], props['end'], props['description'], props['fs'], 0, props['channels'], props['files'])
 
@@ -267,7 +264,7 @@ class WIFF:
 		for chunk in chunks:
 			c = WIFF_chunk(f, chunk['offset header'])
 			if chunk['magic'] == 'WIFFINFO':
-				w = WIFFINFO(self, f, c, chunk['offset data'])
+				w = WIFFINFO(self, f, c)
 				self._chunks[fname].append(w)
 
 				if 'INFO' in self._chunks:
@@ -487,8 +484,14 @@ class WIFF_chunk:
 	def __init__(self, fw, offset):
 		self._s = chunk_struct(fw, offset)
 
+	def resize_callback(self, sz):
+		self.size = sz
+
 	@property
 	def offset(self): return self._s.offset
+
+	@property
+	def data_offset(self): return self.offset + 24
 
 	@property
 	def magic(self): return self._s.magic.val
@@ -507,18 +510,22 @@ class WIFF_chunk:
 	def attributes(self, v):
 		self._s.attributes.val = struct.unpack("<Q", struct.pack("<BBBBBBBB", *v))[0]
 
+
 class WIFFINFO:
-	def __init__(self, wiff, fw, chunk, offset):
+	def __init__(self, wiff, fw, chunk):
 		"""
 		Manage a WIFFINFO chunk using the _filewrap object @fw.
 		Supply the absolute offset @offset the chunk is located at in the file.
 		aLL OPErations are using an mmap and there is no caching.
 		"""
-		self._s = info_struct(fw, offset)
 		self.wiff = wiff
 		self.fw = fw
 		self.chunk = chunk
-		self.offset = offset
+
+		self._s = info_struct(fw, self.chunk.data_offset)
+
+	@property
+	def offset(self): return self._s.offset
 
 	def initchunk(self):
 		"""
