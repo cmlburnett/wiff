@@ -71,35 +71,41 @@ Chunks
 
 
 	Channel definition:
-		The channel definitions section starts with a jump table of byte indices for the specified number of channels.
+		The channel definitions section starts with a jump table of byte indices for the specified number of channels. Each entry in the jump table is 4 bytes long with a 2-byte start and end index for each channel. Total size is thus 4*number of channels.
 
 		[0:1] -- Byte index of start of channel definition #0
-		[2:3] -- Byte index of start of channel definition #1
-		[4:5] -- Byte index of start of channel definition #2
+		[2:3] -- Byte index of end of channel definition #0
+		[4:5] -- Byte index of start of channel definition #1
+		[6:7] -- Byte index of end of channel definition #1
+		[8:9] -- Byte index of start of channel definition #2
 		...
 
 		Each channel then consists of:
-		[0:1] -- Byte index of name of channel string
-		[2] -- Size of samples in bits (actual storage space are upper-bit padded full bytes)
-		[3:4] -- Byte index of physical units string
-		[5:6] -- Byte index of comments string start
-		[7:8] -- Byte index of comments string end (X)
-		[9:X] -- Strings
+		[0] -- Index of channel
+		[1:2] -- Byte index of name of channel string
+		[3] -- Size of samples in bits (actual storage space are upper-bit padded full bytes)
+		[4:5] -- Byte index of physical units string
+		[6:7] -- Byte index of comments string start
+		[8:9] -- Byte index of comments string end (X)
+		[10:X] -- Strings
 
 		Channel definitions are in sequance right after each other, and so [X+1] marks the start of the next channel definition (if not the last channel).
 
 	File definitions:
 		[0:1] -- Byte index of start of file #0
-		[2:3] -- Byte index of start of file #1
-		[4:5] -- Byte index of start of file #2
+		[2:3] -- Byte inoex of end of file #0
+		[4:5] -- Byte index of start of file #1
+		[6:7] -- Byte inoex of end of file #1
+		[8:9] -- Byte index of start of file #2
 		...
 
 		Each file then consists of:
-		[0:1] -- Byte index of file name string start
-		[2:3] -- Byte index of file name string end (X)
-		[4:11] -- Start frame index
-		[12:19] -- End frame index (inclusive)
-		[20:X] -- File name string
+		[0] -- Index of file
+		[1:2] -- Byte index of file name string start
+		[3:4] -- Byte index of file name string end (X)
+		[5:12] -- Start frame index
+		[13:20] -- End frame index (inclusive)
+		[21:X] -- File name string
 
 
 	WIFFWAVE -- Waveform data
@@ -533,7 +539,7 @@ class WIFFINFO:
 		This requires explicit initialization of all the byte indices.
 		"""
 
-		self.index_start = 26
+		self.index_start = info_struct.lenplan("","","", [], [])
 		self.index_end = self.index_start + len(start.strftime(DATE_FMT))
 		self.index_description = self.index_end + len(end.strftime(DATE_FMT))
 		self.index_channels = self.index_description + len(desc)
@@ -567,11 +573,13 @@ class WIFFINFO:
 			self._s.channels_jumptable[i] = (strt, strt+sz)
 			strt += sz
 
+			off = channel_struct.lenplan("","","")
+
 			self._s.channels[i].index.val = i
-			self._s.channels[i].index_name.val = 10
-			self._s.channels[i].index_unit.val = 10 + len(c['name'])
-			self._s.channels[i].index_comment_start.val = 10 + len(c['name']) + len(c['unit'])
-			self._s.channels[i].index_comment_end.val = 10 + len(c['name']) + len(c['unit']) + len(c['comment'])
+			self._s.channels[i].index_name.val = off
+			self._s.channels[i].index_unit.val = off + len(c['name'])
+			self._s.channels[i].index_comment_start.val = off + len(c['name']) + len(c['unit'])
+			self._s.channels[i].index_comment_end.val = off + len(c['name']) + len(c['unit']) + len(c['comment'])
 
 			self._s.channels[i].bit.val = c['bit']
 
