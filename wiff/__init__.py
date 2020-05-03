@@ -463,7 +463,7 @@ class _WIFF_file:
 			f.seek(off)
 
 			p = {
-				'magic': f.read(8).decode('ascii'),
+				'magic': f.read(8).decode('utf8'),
 				'size': None,
 				'attrs': None,
 			}
