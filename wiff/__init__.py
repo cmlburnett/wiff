@@ -151,15 +151,12 @@ import mmap
 import os.path
 import struct
 
-import funpack
-
 from .bits import bitfield
 from .compress import WIFFCompress
 from .structs import chunk_struct, info_struct, channel_struct, file_struct, wave_struct
 
 DATE_FMT = "%Y%m%d %H%M%S.%f"
 WIFF_VERSION = 1
-ENDIAN = funpack.Endianness.Little
 
 
 class WIFF:
