@@ -59,13 +59,12 @@ Chunks
 		[6:7] -- Byte index of channel definitions (X)
 		[8:9] -- Byte index of files start (Y)
 		[10:11] -- Byte index of files end (Z)
-		[12:13] -- 16-bit sampling rate in samples per second
-		[14:15] -- Number of channels (max 256 supported)
-		[16:17] -- Number of files
-		[18:25] -- Number of frames
-		[26:X-1] -- Start of string data for above
+		[12:15] -- 32-bit sampling rate in samples per second
+		[16:17] -- Number of channels (max 256 supported)
+		[18:19] -- Number of files
+		[20:27] -- Number of frames
+		[28:X-1] -- Start of string data for above
 		[X:Y-1] -- Start of channel definitions as non-padded sequences of the definition below
-		[X+2*num_channels:X+2*num_channels+2] -- Start of channel definition for channel 2
 		[Y:Z] -- Start of file definitions as non-padded sequences of the definition below
 
 		Thus, the indices of the strings' start and end can be calculated and the total size of the data block determined without having to parse actual content data (total size is in [8:9]). Strings are NOT null terminated.
