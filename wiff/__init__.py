@@ -818,7 +818,8 @@ class WIFFWAVE:
 		fs = self.wiff._chunks['INFO'].files
 		for f in fs:
 			if f.name.val == self.fw.fname:
-				f.fidx_start.val = v
+				if v < f.fidx_start.val:
+					f.fidx_start.val = v
 				return
 
 		raise IndexError("File not found by name '%s'" % self.fw.fname)
