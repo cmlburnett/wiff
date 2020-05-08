@@ -373,6 +373,27 @@ class WIFF:
 					elif chunk.magic == magic:
 						yield chunk
 
+	def get_annotations(self, typ=None, fidx=None):
+		# Create filter functions based on arguments
+		filts = []
+		if typ is not None:
+			filts.append(lambda x: x.type.val == typ)
+		if fidx is not None:
+			filts.append(lambda x: x.fidx_start.val <= fidx and x.fidx_end.val >= fidx)
+
+		# If no filters provided as arguments, accept everything
+		if not len(filts):
+			filts.append(lambda x:True)
+
+		# Iterate over all annotation chunks
+		chunks = self._GetANNO()
+		for annos in chunks:
+			# Iterate over all annotations
+			for ann in annos.annotations:
+				# Apply filters and accept if all are True
+				if all([_(ann) for _ in filts]):
+					yield ann
+
 	# -----------------------------------------------
 	# -----------------------------------------------
 	# Add data
@@ -975,6 +996,9 @@ class WIFFANNO:
 	def num_annotations(self): return self._s.num_annotations.val
 	@num_annotations.setter
 	def num_annotations(self, val): self._s.num_annotations.val = val
+
+	@property
+	def annotations(self): return self._s.annotations
 
 
 	def add_annotation_C(self, fidx_start, fidx_end, comment):
