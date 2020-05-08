@@ -63,7 +63,8 @@ Chunks
 		[16:17] -- Number of channels (max 256 supported)
 		[18:19] -- Number of files
 		[20:27] -- Number of frames
-		[28:X-1] -- Start of string data for above
+		[28:35] -- Number of annotations
+		[36:X-1] -- Start of string data for above
 		[X:Y-1] -- Start of channel definitions as non-padded sequences of the definition below
 		[Y:Z] -- Start of file definitions as non-padded sequences of the definition below
 
@@ -139,8 +140,13 @@ Chunks
 	Annotations
 		[0:7] -- First annotation index
 		[8:15] -- Last annotation index
-		[16:X-1] -- Annotation jump table
+		[16:23] -- First frame index referenced
+		[24:31] -- Last frame index referenced
+		[32:35] -- Number of annotations
+		[36:X-1] -- Annotation jump table
 		[X:Y] -- Annotation definitions
+
+	The first and last frame indices are meant to aid in speeding up searching for annotations matching annotations to a frame index. Without this, all annotation sections would have to be searched.
 
 	Annotations have different types with variable content each.
 	Markers are character codes that apply to a single frame or a range of frames.
@@ -186,6 +192,7 @@ import struct
 from .bits import bitfield
 from .compress import WIFFCompress
 from .structs import chunk_struct, info_struct, channel_struct, file_struct, wave_struct
+from .structs import annos_struct, ann_struct, ann_C_struct, ann_D_struct, ann_M_struct
 
 DATE_FMT = "%Y%m%d %H%M%S.%f"
 WIFF_VERSION = 1
@@ -212,6 +219,10 @@ class WIFF:
 	def __init__(self, fname, props=None):
 		self._files = {}
 		self._chunks = {}
+
+		self._current_file = None
+		self._current_segment = None
+		self._current_annogations = None
 
 		if os.path.exists(fname):
 			self._open_existing(fname)
@@ -252,6 +263,11 @@ class WIFF:
 	def num_frames(self): return self._chunks['INFO'].num_frames
 	@num_frames.setter
 	def num_frames(self, v): self._chunks['INFO'].num_frames = v
+
+	@property
+	def num_annotations(self): return self._chunks['INFO'].num_annotations
+	@num_annotations.setter
+	def num_annotations(self, v): self._chunks['INFO'].num_annotations = v
 
 	@property
 	def channels(self): return self._chunks['INFO'].channels
@@ -296,7 +312,7 @@ class WIFF:
 		c = WIFF_chunk(f, 0)
 		w = WIFFINFO(self, f, c)
 		w.initchunk()
-		w.initheader(props['start'], props['end'], props['description'], props['fs'], 0, props['channels'], props['files'])
+		w.initheader(props['start'], props['end'], props['description'], props['fs'], 0,0, props['channels'], props['files'])
 
 
 		self._chunks[fname] = [w]
@@ -325,18 +341,21 @@ class WIFF:
 			elif chunk['magic'] == 'WIFFWAVE':
 				w = WIFFWAVE(self, f, c)
 				self._chunks[fname].append(w)
+			elif chunk['magic'] == 'WIFFANNO':
+				w = WIFFANNO(self, f, c)
+				self._chunks[fname].append(w)
 
 			else:
 				raise TypeError('Uknown chunk magic: %s' % chunk['magic'])
 
 	@classmethod
 	def FindChunks(cls, f):
-		sz = os.path.getsize(f.name)
+		total_sz = os.path.getsize(f.name)
 
 		chunks = []
 
 		off = 0
-		while off < sz:
+		while off < total_sz:
 			f.seek(off)
 
 			p = {
@@ -387,6 +406,36 @@ class WIFF:
 		"""
 		raise NotImplementedError
 
+	def new_annotations(self):
+		"""
+		Start a new chunk for annotations.
+		"""
+
+		if self._current_file is None:
+			raise ValueError("Must set active file before creating a new annotations chunk")
+
+		# Blank current annotations pointer
+		self._current_annogations = None
+
+		# Get last chunk
+		fname = self._current_file.fname
+		cs = self._chunks[fname]
+		lastchunk = cs[-1].chunk
+
+		# End of the last chunk (offset + size) is where the next block begins
+		nextoff = lastchunk.offset + lastchunk.size
+
+
+		# Create new chunk
+		self._current_file.resize_add(4096)
+		c = WIFF_chunk(self._current_file, nextoff)
+		w = WIFFANNO(self, self._current_file, c)
+		cs.append(w)
+		w.initchunk(None)
+		w.initheader()
+
+		self._current_annogations = w
+
 	def new_segment(self, chans, segmentid=None):
 		"""
 		Start a new segment in the current file
@@ -431,6 +480,12 @@ class WIFF:
 		"""
 		return self._current_segment.add_frame(*samps)
 
+	def add_annotation(self, **kargs):
+		"""
+		Add an annotation to the current chunk.
+		"""
+		return self._current_annogations.add_annotation(**kargs)
+
 	# -----------------------------------------------
 	# -----------------------------------------------
 	# Dump
@@ -446,6 +501,7 @@ class WIFF:
 			'description': self.description,
 			'fs': self.fs,
 			'num_frames': self.num_frames,
+			'num_annotations': self.num_annotations,
 			'channels': [],
 			'files': [],
 			'segments': [],
@@ -485,6 +541,7 @@ class WIFF:
 		ret.append("%20s | %s" % ("End", d['end']))
 		ret.append("%20s | %s" % ("fs", d['fs']))
 		ret.append("%20s | %s" % ("Number of Frames", d['num_frames']))
+		ret.append("%20s | %s" % ("Number of Annotations", d['num_annotations']))
 		ret.append("")
 		for c in d['channels']:
 			ret.append("%20s %d" % ('Channel', c['idx']))
@@ -629,7 +686,7 @@ class WIFFINFO:
 		# Version 1
 		self.chunk.attributes = (1,0,0,0, 0,0,0,0)
 
-	def initheader(self, start, end, desc, fs, num_frames, channels, files):
+	def initheader(self, start, end, desc, fs, num_frames, num_annotations, channels, files):
 		"""
 		Initializes a new header
 		This requires explicit initialization of all the byte indices.
@@ -642,6 +699,7 @@ class WIFFINFO:
 
 		self.fs = fs
 		self.num_frames = num_frames
+		self.num_annotations = num_annotations
 		self.num_channels = len(channels)
 		self.num_files = len(files)
 
@@ -762,6 +820,11 @@ class WIFFINFO:
 	@num_frames.setter
 	def num_frames(self, val): self._s.num_frames.val = val
 
+	@property
+	def num_annotations(self): return self._s.num_annotations.val
+	@num_annotations.setter
+	def num_annotations(self, val): self._s.num_annotations.val = val
+
 
 	@property
 	def start(self):
@@ -809,6 +872,168 @@ class WIFFINFO:
 
 	@property
 	def files(self): return self._s.files
+
+class WIFFANNO:
+	"""
+	Helper class that handles annotations.
+	"""
+
+	def __init__(self, wiff, fw, chunk):
+		self.wiff = wiff
+		self.fw = fw
+		self.chunk = chunk
+		self._s = annos_struct(fw, chunk.data_offset)
+
+	def initchunk(self, compression):
+		"""
+		Initiailizes a new chunk for this chunk type.
+		"""
+
+		# All new chunks are given a 4096 block initially
+		# Expand to 2 blocks (1 for jumptable, 1 for data)
+		self.fw.resize_add(4096)
+
+		self.chunk.magic = 'WIFFANNO'
+		self.chunk.size = 4096*2
+		self.chunk.attributes = (0,0,0,0, 0,0,0,0)
+
+		attrs = [0]*8
+		if compression is None:
+			attrs[0] = ord('0')
+		elif compression.lower() == 'z':
+			attrs[0] = ord('Z')
+		elif compression.lower() == 'b':
+			attrs[0] = ord('B')
+		else:
+			raise ValueError('Unrecognized comppression type "%s"' % compression)
+
+		self.chunk.attributes = tuple(attrs)
+
+	def initheader(self):
+		"""
+		Initialize a new header.
+		"""
+
+		self.aidx_start = 0
+		self.aidx_end = 0
+		self.fidx_first = 0
+		self.fidx_last = 0
+		self.num_annotations = 0
+		self._s.index_annotations.val = 38
+
+	@property
+	def aidx_start(self): return self._s.aidx_start.val
+	@aidx_start.setter
+	def aidx_start(self, val): self._s.aidx_start.val = val
+
+	@property
+	def aidx_end(self): return self._s.aidx_end.val
+	@aidx_end.setter
+	def aidx_end(self, val): self._s.aidx_end.val = val
+
+	@property
+	def fidx_first(self): return self._s.fidx_first.val
+	@fidx_first.setter
+	def fidx_first(self, val): self._s.fidx_first.val = val
+
+	@property
+	def fidx_last(self): return self._s.fidx_last.val
+	@fidx_last.setter
+	def fidx_last(self, val): self._s.fidx_last.val = val
+
+	@property
+	def num_annotations(self): return self._s.num_annotations.val
+	@num_annotations.setter
+	def num_annotations(self, val): self._s.num_annotations.val = val
+
+
+	def add_annotation_C(self, fidx_start, fidx_end, comment):
+		return self.add_annotation('C', fidx_start, fidx_end, comment=comment)
+	def add_annotation_M(self, fidx_start, fidx_end, marker):
+		return self.add_annotation('M', fidx_start, fidx_end, marker=marker)
+	def add_annotation_D(self, fidx_start, fidx_end, marker, dat):
+		return self.add_annotation('D', fidx_start, fidx_end, marker=marker, dat=dat)
+	def add_annotation(self, typ, fidx_start, fidx_end, **parms):
+		"""
+		Adds an annotation to the currently selected annotation segment.
+		Can use this generic function, or one of the related functions to simplify coding.
+		"""
+
+		# Check for annotation type
+		if typ == 'C':
+			if 'comment' not in parms: raise ValueError("For a 'C' annotation, expected a comment parameter")
+		elif typ == 'M':
+			if 'marker' not in parms: raise ValueError("For a 'M' annotation, expected a marker parameter")
+		elif typ == 'D':
+			if 'marker' not in parms: raise ValueError("For a 'D' annotation, expected a marker parameter")
+			if 'dat' not in parms: raise ValueError("For a 'D' annotation, expected a dat parameter")
+		else:
+			raise KeyError("Unexpected annotation type '%s', not recognized" % (typ,))
+
+		ln = ann_struct.lenplan(typ, **parms)
+
+		# Convert 4-char string to a 32-bit number
+		if 'marker' in parms and isinstance(parms['marker'], str):
+			parms['marker'] = struct.unpack("<I", parms['marker'].encode('ascii'))[0]
+
+		# Get the annotation number (same as the annotations[] index)
+		ann_no = self.num_annotations
+
+		if self.num_annotations == 0:
+			# First annotation
+			self.aidx_start = 0
+			self.aidx_end = 0
+			self.fidx_first = fidx_start
+			self.fidx_last = fidx_end
+
+			# Start first annotation at the next page boundary
+			# But offset in the jumplist is relative to the start of the jump list
+			_off = self._s.index_annotations.val
+			# Subtract off the header
+			_off += self._s.offset - self.chunk.offset
+
+			# Set first jump
+			self._s.annotations_jumplist[ann_no] = (4096-_off, 4096-_off+ln)
+
+		else:
+			# TODO Expand if needed
+
+			# Get previous offsets
+			prev = self._s.annotations_jumplist[ann_no-1]
+
+			# Set new jump
+			x = self._s.annotations_jumplist[ann_no] = (prev[1], prev[1] + ln)
+
+		# Update counter
+		self.num_annotations = ann_no + 1
+
+		# Copy in annotation data
+		a = self._s.annotations[ann_no]
+		a.type.val = typ
+		a.fidx_start.val = fidx_start
+		a.fidx_end.val = fidx_end
+
+		aa = a.condition_on('type')
+		if typ == 'C':
+			aoff = ann_C_struct.lenplan("")
+			aa.index_comment_start.val = aoff
+			aa.index_comment_end.val = aoff + len(parms['comment'])
+			aa.comment.val = parms['comment']
+		elif typ == 'D':
+			aa.marker.val = parms['marker']
+			aa.value.val = parms['value']
+		elif typ == 'M':
+			aa.marker.val = parms['marker']
+		else:
+			raise ValueError("Unrecognized annotation type '%s'" % typ)
+
+
+		# Update annotations header
+		self.aidx_end = self.aidx_start + ann_no
+		# Update frame index range
+		self.fidx_first = min(self.fidx_first, fidx_start)
+		self.fidx_last = max(self.fidx_last, fidx_end)
+
 
 class WIFFWAVE:
 	"""
