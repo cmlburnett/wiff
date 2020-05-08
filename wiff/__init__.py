@@ -348,14 +348,25 @@ class WIFF:
 			else:
 				raise TypeError('Uknown chunk magic: %s' % chunk['magic'])
 
+	# Get all matching chunks
+	def _GetINFO(self): return self._GetChunks('WIFFINFO')
+	def _GetWAVE(self): return self._GetChunks('WIFFWAVE')
+	def _GetANNO(self): return self._GetChunks('WIFFANNO')
 	def _GetChunks(self, magic=None):
-		for fname in self._files.keys():
-			for chunk in chunks
-				if magic is None:
-					yield chunk
+		for fname in self._chunks.keys():
+			chunks = self._chunks[fname]
+			if fname == 'INFO':
+				if magic == 'WIFFINFO':
+					yield self._chunks[fname]
 				else:
-					if chunk.magic == magic:
+					continue
+			else:
+				for chunk in chunks:
+					if magic is None:
 						yield chunk
+					else:
+						if chunk.magic == magic:
+							yield chunk
 
 	# -----------------------------------------------
 	# -----------------------------------------------
@@ -779,6 +790,9 @@ class WIFFINFO:
 		self.index_file_end = self._s.files_jumptable[-1][1] + self._s.files_jumptable.offset
 
 	@property
+	def magic(self): return self.chunk.magic
+
+	@property
 	def index_start(self): return self._s.index_start.val
 	@index_start.setter
 	def index_start(self, val): self._s.index_start.val = val
@@ -928,6 +942,9 @@ class WIFFANNO:
 		self.fidx_last = 0
 		self.num_annotations = 0
 		self._s.index_annotations.val = 38
+
+	@property
+	def magic(self): return self.chunk.magic
 
 	@property
 	def aidx_start(self): return self._s.aidx_start.val
@@ -1104,6 +1121,9 @@ class WIFFWAVE:
 
 		# Set frame size
 		self._s.records.size = frame_size
+
+	@property
+	def magic(self): return self.chunk.magic
 
 	@property
 	def channels(self):
