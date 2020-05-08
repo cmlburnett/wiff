@@ -188,6 +188,7 @@ import json
 import mmap
 import os.path
 import struct
+import types
 
 from .bits import bitfield
 from .compress import WIFFCompress
@@ -374,12 +375,32 @@ class WIFF:
 						yield chunk
 
 	def get_annotations(self, typ=None, fidx=None):
+		"""
+		Get all annotations that match all supplied arguments.
+		@typ -- Type of the annotation must match exactly
+		@fidx -- Frame index must be between the start and stop indices of the annotation
+
+		These options can take the appropriate type (string, int, etc).
+		Alternatively, the value can be a function whose value is evaluated as a boolean.
+		"""
+
 		# Create filter functions based on arguments
 		filts = []
 		if typ is not None:
-			filts.append(lambda x: x.type.val == typ)
+			if isinstance(typ, str):
+				filts.append(lambda x: x.type.val == typ)
+			elif isinstance(typ, types.FunctionType):
+				filts.append(typ)
+			else:
+				raise TypeError('Unrecognize type for @typ argument (expect str or function): "%s"' % (str(typ),))
+
 		if fidx is not None:
-			filts.append(lambda x: x.fidx_start.val <= fidx and x.fidx_end.val >= fidx)
+			if isinstance(fidx, int):
+				filts.append(lambda x: x.fidx_start.val <= fidx and x.fidx_end.val >= fidx)
+			elif isinstance(fidx, types.FunctionType):
+				filts.append(fidx)
+			else:
+				raise TypeError('Unrecognize type for @fidx argument (expect int or function): "%s"' % (str(fidx),))
 
 		# If no filters provided as arguments, accept everything
 		if not len(filts):
@@ -393,6 +414,31 @@ class WIFF:
 				# Apply filters and accept if all are True
 				if all([_(ann) for _ in filts]):
 					yield ann
+
+	def get_frames(self, index):
+		if isinstance(index, int):
+			return [self.get_frame(index)]
+		elif isinstance(index, slice):
+			raise NotImplementedError
+		else:
+			raise TypeError("Unrecognize argument for index: '%s'" % (str(index),))
+
+	def get_frame(self, index):
+		chunks = self._GetWAVE()
+		for chunk in chunks:
+			if chunk.fidx_start > index:
+				continue
+			if chunk.fidx_end < index:
+				continue
+
+			# index is in this chunk
+			off = index - chunk.fidx_start
+
+			bs = chunk[off]
+			# TODO: split into channels
+			return bs
+
+		raise KeyError("Frame index %d not found" % index)
 
 	# -----------------------------------------------
 	# -----------------------------------------------
@@ -1201,6 +1247,9 @@ class WIFFWAVE:
 				return
 
 		raise IndexError("File not found by name '%s'" % self.fw.fname)
+
+	def __getitem__(self, index):
+		return self._s.records[index]
 
 	def add_frame(self, *samps):
 		"""
