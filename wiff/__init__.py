@@ -353,6 +353,10 @@ class WIFF:
 	def _GetWAVE(self): return self._GetChunks('WIFFWAVE')
 	def _GetANNO(self): return self._GetChunks('WIFFANNO')
 	def _GetChunks(self, magic=None):
+		"""
+		Find all matching chunks for the magic (WIFFINFO, WIFFWAVE, WIFFANNO) or
+		use a _GetINFO, _GetWAVE, _GetANNO.
+		"""
 		for fname in self._chunks.keys():
 			chunks = self._chunks[fname]
 			if fname == 'INFO':
