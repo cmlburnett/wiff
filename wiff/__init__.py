@@ -360,16 +360,18 @@ class WIFF:
 		if magic == 'WIFFINFO':
 			yield self._chunks['INFO']
 		else:
+			# Iterate over all files
 			for fname in self._chunks.keys():
 				if fname == 'INFO': continue
 
+				# Iterate over the chunks in each file
 				chunks = self._chunks[fname]
 				for chunk in chunks:
+					# Compare magic
 					if magic is None:
 						yield chunk
-					else:
-						if chunk.magic == magic:
-							yield chunk
+					elif chunk.magic == magic:
+						yield chunk
 
 	# -----------------------------------------------
 	# -----------------------------------------------
