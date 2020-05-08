@@ -328,7 +328,7 @@ class WIFF:
 		# Wrap file
 		f = self._files[fname] = _filewrap(fname)
 
-		chunks = WIFF.FindChunks(f.f)
+		chunks = WIFF_chunk.FindChunks(f.f)
 		for chunk in chunks:
 			c = WIFF_chunk(f, chunk['offset header'])
 			if chunk['magic'] == 'WIFFINFO':
@@ -347,40 +347,6 @@ class WIFF:
 
 			else:
 				raise TypeError('Uknown chunk magic: %s' % chunk['magic'])
-
-	@classmethod
-	def FindChunks(cls, f):
-		total_sz = os.path.getsize(f.name)
-
-		chunks = []
-
-		off = 0
-		while off < total_sz:
-			f.seek(off)
-
-			p = {
-				'magic': f.read(8).decode('utf8'),
-				'size': None,
-				'attrs': None,
-			}
-
-			dat = f.read(8)
-			sz = struct.unpack("<Q", dat)[0]
-			if sz == 0:
-				raise ValueError("Found zero length chunk, non-sensical")
-			p['size'] = sz
-
-			dat = f.read(8)
-			p['attrs'] = struct.unpack("<BBBBBBBB", dat)
-
-			# Include offsets
-			p['offset header'] = off
-			p['offset data'] = off + 24
-
-			chunks.append(p)
-			off += p['size']
-
-		return chunks
 
 
 	# -----------------------------------------------
@@ -655,6 +621,40 @@ class WIFF_chunk:
 	def attributes(self, v):
 		self._s.attributes.val = struct.unpack("<Q", struct.pack("<BBBBBBBB", *v))[0]
 
+
+	@staticmethod
+	def FindChunks(f):
+		total_sz = os.path.getsize(f.name)
+
+		chunks = []
+
+		off = 0
+		while off < total_sz:
+			f.seek(off)
+
+			p = {
+				'magic': f.read(8).decode('utf8'),
+				'size': None,
+				'attrs': None,
+			}
+
+			dat = f.read(8)
+			sz = struct.unpack("<Q", dat)[0]
+			if sz == 0:
+				raise ValueError("Found zero length chunk, non-sensical")
+			p['size'] = sz
+
+			dat = f.read(8)
+			p['attrs'] = struct.unpack("<BBBBBBBB", dat)
+
+			# Include offsets
+			p['offset header'] = off
+			p['offset data'] = off + 24
+
+			chunks.append(p)
+			off += p['size']
+
+		return chunks
 
 class WIFFINFO:
 	"""
