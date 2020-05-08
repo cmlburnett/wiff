@@ -348,6 +348,14 @@ class WIFF:
 			else:
 				raise TypeError('Uknown chunk magic: %s' % chunk['magic'])
 
+	def _GetChunks(self, magic=None):
+		for fname in self._files.keys():
+			for chunk in chunks
+				if magic is None:
+					yield chunk
+				else:
+					if chunk.magic == magic:
+						yield chunk
 
 	# -----------------------------------------------
 	# -----------------------------------------------
