@@ -357,14 +357,13 @@ class WIFF:
 		Find all matching chunks for the magic (WIFFINFO, WIFFWAVE, WIFFANNO) or
 		use a _GetINFO, _GetWAVE, _GetANNO.
 		"""
-		for fname in self._chunks.keys():
-			chunks = self._chunks[fname]
-			if fname == 'INFO':
-				if magic == 'WIFFINFO':
-					yield self._chunks[fname]
-				else:
-					continue
-			else:
+		if magic == 'WIFFINFO':
+			yield self._chunks['INFO']
+		else:
+			for fname in self._chunks.keys():
+				if fname == 'INFO': continue
+
+				chunks = self._chunks[fname]
 				for chunk in chunks:
 					if magic is None:
 						yield chunk
