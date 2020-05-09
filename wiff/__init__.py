@@ -441,7 +441,7 @@ class WIFF:
 
 			if to_int:
 				bs = chunk[off]
-				return chunk._deser(bs)
+				return chunk.DeSer(bs)
 			else:
 				return chunk[off]
 
@@ -1322,6 +1322,17 @@ class WIFFWAVE:
 
 	def __getitem__(self, index):
 		return self._s.records[index]
+
+	@property
+	def Ser(self):
+		if self._ser is None: self.setup()
+		return self._ser
+
+	@property
+	def DeSer(self):
+		if self._deser is None: self.setup()
+		return self._deser
+
 
 	def add_frame(self, *samps):
 		"""
