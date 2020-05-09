@@ -341,6 +341,7 @@ class WIFF:
 				self._chunks['INFO'] = w
 			elif chunk['magic'] == 'WIFFWAVE':
 				w = WIFFWAVE(self, f, c)
+				w.setup()
 				self._chunks[fname].append(w)
 			elif chunk['magic'] == 'WIFFANNO':
 				w = WIFFANNO(self, f, c)
@@ -423,7 +424,11 @@ class WIFF:
 		else:
 			raise TypeError("Unrecognize argument for index: '%s'" % (str(index),))
 
-	def get_frame(self, index):
+	def get_frame(self, index, to_int=True):
+		"""
+		Get a single frame of data as bytes (@to_int == False) or integers (@to_int == True).
+		Not very efficient for repeated use.
+		"""
 		chunks = self._GetWAVE()
 		for chunk in chunks:
 			if chunk.fidx_start > index:
@@ -434,9 +439,11 @@ class WIFF:
 			# index is in this chunk
 			off = index - chunk.fidx_start
 
-			bs = chunk[off]
-			# TODO: split into channels
-			return bs
+			if to_int:
+				bs = chunk[off]
+				return chunk._deser(bs)
+			else:
+				return chunk[off]
 
 		raise KeyError("Frame index %d not found" % index)
 
@@ -1147,6 +1154,69 @@ class WIFFWAVE:
 		self.chunk = chunk
 		self._s = wave_struct(fw, chunk.data_offset)
 
+		self._frame_size = None
+		self._ser = None
+		self._deser = None
+
+	def setup(self):
+		"""
+		Must be called after creating object on an old chunk, or done automatically when calling initheader().
+		This creates a serializer (_ser) and de-serializer (_deser) for converting frames to bytes/ints and vice versa.
+		"""
+
+		# Get channel indices
+		mychans = self.channels
+
+		# Get channel objects
+		chans = [self.wiff.channels[_] for _ in mychans]
+
+		# Expand to full bytes
+		chan_size = [c.bit.val + (c.bit.val%8) for c in chans]
+		chan_size = [_//8 for _ in chan_size]
+		self._frame_size = sum(chan_size)
+
+		# Evaluate if able to use struct to parse bytes or if must step manually.
+		allsane = True
+		structstr = "<"
+		for chan in chan_size:
+			if chan == 1: structstr += "B"
+			elif chan == 2: structstr += "H"
+			elif chan == 4: structstr += "I"
+			elif chan == 8: structstr += "Q"
+			else:
+				allsane = False
+				break
+
+		if allsane:
+			# All channel sizes are sane struct sizes (1, 2, 4, or 8 bytes each)
+			# Form a struct object with string parsed once and used for both ser and deser
+			s = struct.Struct(structstr)
+			def sane_ser(*samps, _s=s):
+				return _s.pack(*samps)
+			def sane_deser(dat, _s=s):
+				return _s.unpack(dat)
+
+			self._ser = sane_ser
+			self._deser = sane_deser
+		else:
+			# Non-sane sizes (at least one channel is not 1, 2, 4, or 8 bytes in size)
+			# Have to manually step through and parse the bytes (can't use struct library)
+			def insane_ser(samps, chans=chan_size):
+				ret = []
+				for i in range(len(chans)):
+					ret.append( samps[i].to_bytes(chans[i], byteorder='little') )
+				return b''.join(ret)
+			def insane_deser(dat, chans=chan_size):
+				ret = []
+				off = 0
+				for i in range(len(chans)):
+					ret.append( int.from_bytes(dat[off:off+chans[i]], byteorder='little') )
+					off += chans[i]
+				return tuple(ret)
+
+			self._ser = insane_ser
+			self._deser = insane_deser
+
 	def initchunk(self, compression, segmentid):
 		"""
 		Initiailizes a new chunk for this chunk type.
@@ -1196,6 +1266,8 @@ class WIFFWAVE:
 
 		# Set frame size
 		self._s.records.size = frame_size
+
+		self.setup()
 
 	@property
 	def magic(self): return self.chunk.magic
