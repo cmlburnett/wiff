@@ -416,13 +416,16 @@ class WIFF:
 				if all([_(ann) for _ in filts]):
 					yield ann
 
-	def get_frames(self, index):
-		if isinstance(index, int):
-			return [self.get_frame(index)]
-		elif isinstance(index, slice):
-			raise NotImplementedError
-		else:
-			raise TypeError("Unrecognize argument for index: '%s'" % (str(index),))
+	def get_frames(self, start, stop=None, to_int=True):
+		ret = {
+			'start': start,
+			'stop': stop,
+			'frames': None,
+		}
+		ret['frames'] = list(self.iter_frames(start,stop, to_int=to_int))
+		ret['stop'] = ret['start'] + len(ret['frames']) - 1
+
+		return ret
 
 	def get_frame(self, index, to_int=True):
 		"""
@@ -446,6 +449,39 @@ class WIFF:
 				return chunk[off]
 
 		raise KeyError("Frame index %d not found" % index)
+
+	def iter_frames(self, start, stop=None, to_int=True):
+		"""
+		Gets frames in sequence from @start to @stop frame indices.
+		If @stop is None, then it will read through the end of the file.
+		Get frames of data as bytes (@to_int == False) or integers (@to_int == True).
+		"""
+
+		# Get chunks and sort by start
+		chunks = self._GetWAVE()
+		chunks = sorted(chunks, key=lambda x:x.fidx_start)
+
+		i = start
+
+		for chunk in chunks:
+			# Skip to first chunk
+			if chunk.fidx_start > i:
+				continue
+
+			while i <= chunk.fidx_end:
+				# Get relative offset in the chunk and get frame
+				off = i - chunk.fidx_start
+				bs = chunk[off]
+
+				if to_int:
+					yield chunk.DeSer(bs)
+				else:
+					yield bs
+
+				i += 1
+				if stop is not None and i > stop:
+					raise StopIteration
+
 
 	# -----------------------------------------------
 	# -----------------------------------------------
