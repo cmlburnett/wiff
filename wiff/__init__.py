@@ -459,7 +459,6 @@ class WIFF:
 
 			# index is in this chunk
 			off = index - chunk.fidx_start
-			print([chunk.fidx_start, index, off])
 
 			if to_int:
 				bs = chunk[off]
