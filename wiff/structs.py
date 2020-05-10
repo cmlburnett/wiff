@@ -190,7 +190,7 @@ class ann_struct(metaclass=bstructmeta):
 		elif typ == 'C':
 			return ann_C_struct.lenplan(kargs['comment'])
 		elif typ == 'D':
-			return ann_D_struct.lenplan(kargs['dat'])
+			return ann_D_struct.lenplan()
 		elif typ == 'M':
 			return ann_M_struct.lenplan()
 		else:

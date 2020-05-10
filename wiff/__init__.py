@@ -200,6 +200,17 @@ from .structs import annos_struct, ann_struct, ann_C_struct, ann_D_struct, ann_M
 DATE_FMT = "%Y%m%d %H%M%S.%f"
 WIFF_VERSION = 1
 
+def twotuplecheck(x):
+	if isinstance(x, tuple):
+		if len(x) == 2 and isinstance(x[0], int) and isinstance(x[1], int):
+			return bstruct.interval(*x)
+		else:
+			raise ValueError("Tuple is not 2 integers")
+	elif isinstance(x, bstruct.interval):
+		return x
+	else:
+		raise TypeError("Not a 2-tuple or an interval")
+
 class WIFF:
 	"""
 	Primary interface class to a WIFF recording.
@@ -431,12 +442,10 @@ class WIFF:
 			ret['stop'] = val.stop
 			ret['interval'] = val
 		elif isinstance(val, tuple):
-			if len(val) == 2 and isinstance(val[0], int) and isinstance(val[1], int):
-				ret['start'] = val[0]
-				ret['stop'] = val[1]
-				ret['interval'] = interval(*val)
-			else:
-				raise TypeError("Val is a tuple but is not two integers: %s" % (str(val),))
+			val = twotuplecheck(val)
+			ret['start'] = val.start
+			ret['stop'] = val.stop
+			ret['interval'] = val
 		else:
 			raise TypeError("Unrecognized val type: %s" % (type(val),))
 
@@ -1119,8 +1128,8 @@ class WIFFANNO:
 		return self.add_annotation('C', fidx, comment=comment)
 	def add_annotation_M(self, fidx, marker):
 		return self.add_annotation('M', fidx, marker=marker)
-	def add_annotation_D(self, fidx, marker, dat):
-		return self.add_annotation('D', fidx, marker=marker, dat=dat)
+	def add_annotation_D(self, fidx, marker, value):
+		return self.add_annotation('D', fidx, marker=marker, value=value)
 	def add_annotation(self, typ, fidx, **parms):
 		"""
 		Adds an annotation to the currently selected annotation segment.
@@ -1134,9 +1143,12 @@ class WIFFANNO:
 			if 'marker' not in parms: raise ValueError("For a 'M' annotation, expected a marker parameter")
 		elif typ == 'D':
 			if 'marker' not in parms: raise ValueError("For a 'D' annotation, expected a marker parameter")
-			if 'dat' not in parms: raise ValueError("For a 'D' annotation, expected a dat parameter")
+			if 'value' not in parms: raise ValueError("For a 'D' annotation, expected a value parameter")
 		else:
 			raise KeyError("Unexpected annotation type '%s', not recognized" % (typ,))
+
+		# Coerce if able to an interval
+		fidx = twotuplecheck(fidx)
 
 		ln = ann_struct.lenplan(typ, **parms)
 
