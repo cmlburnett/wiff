@@ -190,6 +190,8 @@ import os.path
 import struct
 import types
 
+import bstruct
+
 from .bits import bitfield
 from .compress import WIFFCompress
 from .structs import chunk_struct, info_struct, channel_struct, file_struct, wave_struct
@@ -397,9 +399,11 @@ class WIFF:
 
 		if fidx is not None:
 			if isinstance(fidx, int):
-				filts.append(lambda x: x.fidx_start.val <= fidx and x.fidx_end.val >= fidx)
+				filts.append(lambda x,fidx=fidx: x.fidx_start.val <= fidx and x.fidx_end.val >= fidx)
 			elif isinstance(fidx, types.FunctionType):
 				filts.append(fidx)
+			elif isinstance(fidx, bstruct.interval):
+				filts.append(lambda x, fidx=fidx: x.fidx_start.val in fidx or x.fidx_end.val in fidx)
 			else:
 				raise TypeError('Unrecognize type for @fidx argument (expect int or function): "%s"' % (str(fidx),))
 
@@ -416,13 +420,27 @@ class WIFF:
 				if all([_(ann) for _ in filts]):
 					yield ann
 
-	def get_frames(self, start, stop=None, to_int=True):
+	def get_frames(self, val, to_int=True):
 		ret = {
-			'start': start,
-			'stop': stop,
+			'start': None,
+			'stop': None,
 			'frames': None,
 		}
-		ret['frames'] = list(self.iter_frames(start,stop, to_int=to_int))
+		if isinstance(val, bstruct.interval):
+			ret['start'] = val.start
+			ret['stop'] = val.stop
+			ret['interval'] = val
+		elif isinstance(val, tuple):
+			if len(val) == 2 and isinstance(val[0], int) and isinstance(val[1], int):
+				ret['start'] = val[0]
+				ret['stop'] = val[1]
+				ret['interval'] = interval(*val)
+			else:
+				raise TypeError("Val is a tuple but is not two integers: %s" % (str(val),))
+		else:
+			raise TypeError("Unrecognized val type: %s" % (type(val),))
+
+		ret['frames'] = list(self.iter_frames(val, to_int=to_int))
 		ret['stop'] = ret['start'] + len(ret['frames']) - 1
 
 		return ret
@@ -450,10 +468,9 @@ class WIFF:
 
 		raise KeyError("Frame index %d not found" % index)
 
-	def iter_frames(self, start, stop=None, to_int=True):
+	def iter_frames(self, val, to_int=True):
 		"""
-		Gets frames in sequence from @start to @stop frame indices.
-		If @stop is None, then it will read through the end of the file.
+		Gets frames in sequence from @val frame indices.
 		Get frames of data as bytes (@to_int == False) or integers (@to_int == True).
 		"""
 
@@ -461,7 +478,7 @@ class WIFF:
 		chunks = self._GetWAVE()
 		chunks = sorted(chunks, key=lambda x:x.fidx_start)
 
-		i = start
+		i = val.start
 
 		for chunk in chunks:
 			# Skip to first chunk
@@ -479,7 +496,7 @@ class WIFF:
 					yield bs
 
 				i += 1
-				if stop is not None and i > stop:
+				if i > val.stop:
 					raise StopIteration
 
 
@@ -863,11 +880,15 @@ class WIFFINFO:
 
 			off = channel_struct.lenplan("","","")
 
+			ln_name = len(c['name'])
+			ln_unit = len(c['unit'])
+			ln_comment = len(c['comment'])
+
 			self._s.channels[i].index.val = i
 			self._s.channels[i].index_name.val = off
-			self._s.channels[i].index_unit.val = off + len(c['name'])
-			self._s.channels[i].index_comment_start.val = off + len(c['name']) + len(c['unit'])
-			self._s.channels[i].index_comment_end.val = off + len(c['name']) + len(c['unit']) + len(c['comment'])
+			self._s.channels[i].index_unit.val = off + ln_name
+			self._s.channels[i].index_comment_start.val = off + ln_name + ln_unit
+			self._s.channels[i].index_comment_end.val = off + ln_name + ln_unit + ln_comment
 
 			self._s.channels[i].bit.val = c['bit']
 
@@ -1062,6 +1083,10 @@ class WIFFANNO:
 	def magic(self): return self.chunk.magic
 
 	@property
+	def aidx(self): return bstruct.interval(self.aidx_start, self.aidx_end)
+	def fidx(self): return bstruct.interval(self.fidx_first, self.fidx_last)
+
+	@property
 	def aidx_start(self): return self._s.aidx_start.val
 	@aidx_start.setter
 	def aidx_start(self, val): self._s.aidx_start.val = val
@@ -1090,13 +1115,13 @@ class WIFFANNO:
 	def annotations(self): return self._s.annotations
 
 
-	def add_annotation_C(self, fidx_start, fidx_end, comment):
-		return self.add_annotation('C', fidx_start, fidx_end, comment=comment)
-	def add_annotation_M(self, fidx_start, fidx_end, marker):
-		return self.add_annotation('M', fidx_start, fidx_end, marker=marker)
-	def add_annotation_D(self, fidx_start, fidx_end, marker, dat):
-		return self.add_annotation('D', fidx_start, fidx_end, marker=marker, dat=dat)
-	def add_annotation(self, typ, fidx_start, fidx_end, **parms):
+	def add_annotation_C(self, fidx, comment):
+		return self.add_annotation('C', fidx, comment=comment)
+	def add_annotation_M(self, fidx, marker):
+		return self.add_annotation('M', fidx, marker=marker)
+	def add_annotation_D(self, fidx, marker, dat):
+		return self.add_annotation('D', fidx, marker=marker, dat=dat)
+	def add_annotation(self, typ, fidx, **parms):
 		"""
 		Adds an annotation to the currently selected annotation segment.
 		Can use this generic function, or one of the related functions to simplify coding.
@@ -1126,8 +1151,8 @@ class WIFFANNO:
 			# First annotation
 			self.aidx_start = 0
 			self.aidx_end = 0
-			self.fidx_first = fidx_start
-			self.fidx_last = fidx_end
+			self.fidx_first = fidx.start
+			self.fidx_last = fidx.stop
 
 			# Start first annotation at the next page boundary
 			# But offset in the jumplist is relative to the start of the jump list
@@ -1153,8 +1178,8 @@ class WIFFANNO:
 		# Copy in annotation data
 		a = self._s.annotations[ann_no]
 		a.type.val = typ
-		a.fidx_start.val = fidx_start
-		a.fidx_end.val = fidx_end
+		a.fidx_start.val = fidx.start
+		a.fidx_end.val = fidx.stop
 
 		aa = a.condition_on('type')
 		if typ == 'C':
@@ -1174,8 +1199,8 @@ class WIFFANNO:
 		# Update annotations header
 		self.aidx_end = self.aidx_start + ann_no
 		# Update frame index range
-		self.fidx_first = min(self.fidx_first, fidx_start)
-		self.fidx_last = max(self.fidx_last, fidx_end)
+		self.fidx_first = min(self.fidx_first, fidx.start)
+		self.fidx_last = max(self.fidx_last, fidx.stop)
 
 
 class WIFFWAVE:
@@ -1355,6 +1380,9 @@ class WIFFWAVE:
 				return
 
 		raise IndexError("File not found by name '%s'" % self.fw.fname)
+
+	@property
+	def fidx(self): return bstruct.interval(self.fidx_start, self.fidx_end)
 
 	def __getitem__(self, index):
 		return self._s.records[index]
