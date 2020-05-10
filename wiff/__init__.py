@@ -487,6 +487,8 @@ class WIFF:
 		chunks = self._GetWAVE()
 		chunks = sorted(chunks, key=lambda x:x.fidx_start)
 
+		val = twotuplecheck(val)
+
 		i = val.start
 
 		for chunk in chunks:
@@ -712,6 +714,10 @@ class _filewrap:
 		self.f = open(fname, 'r+b')
 		self.mmap = mmap.mmap(self.f.fileno(), 0)
 		self.size = os.path.getsize(fname)
+
+	def close(self):
+		self.mmap.close()
+		self.f.close()
 
 	def resize(self, sz):
 		"""Change the size of the memory map and the file"""

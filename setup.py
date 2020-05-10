@@ -1,4 +1,4 @@
-from distutils.core import setup
+from setuptools import setup
 
 majv = 1
 minv = 0
@@ -14,5 +14,6 @@ setup(
 	package_data = {'wiff': ['wiff/__init__.py']},
 	classifiers = [
 		'Programming Language :: Python :: 3.7'
-	]
+	],
+	test_suite = "tests",
 )
