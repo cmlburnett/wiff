@@ -69,5 +69,3 @@ class SimpleTests(unittest.TestCase):
 			finally:
 				os.unlink(fname)
 
-
-
