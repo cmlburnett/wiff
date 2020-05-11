@@ -121,6 +121,9 @@ class wave_struct(metaclass=bstructmeta):
 		# based on runtime needs
 		'records': member_binary_record(48, 1),
 	}
+	@staticmethod
+	def lenplan(record_size, num_records):
+		return 48 + record_size+num_records
 
 class ann_C_struct(metaclass=bstructmeta):
 	dat = {

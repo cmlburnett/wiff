@@ -289,6 +289,9 @@ class WIFF:
 	@property
 	def files(self): return self._chunks['INFO'].files
 
+	@property
+	def current_segment(self): return self._current_segment
+
 	def __enter__(self):
 		pass
 	def __exit__(self, *exc):
@@ -1220,7 +1223,6 @@ class WIFFANNO:
 		self.fidx_first = min(self.fidx_first, fidx.start)
 		self.fidx_last = max(self.fidx_last, fidx.stop)
 
-
 class WIFFWAVE:
 	"""
 	Helper class that interfaces the data portion of a WIFFWAVE chunk.
@@ -1415,6 +1417,64 @@ class WIFFWAVE:
 		if self._deser is None: self.setup()
 		return self._deser
 
+	@property
+	def channel_sizes(self):
+		"""
+		Get sizes of the channels as a tuple of full bytes.
+		"""
+		chans = self.channels
+
+		# Get channel objects
+		chans = [self.wiff.channels[_] for _ in chans]
+
+		# Expand to full bytes and check they match data size
+		return tuple([c.bit.val + (c.bit.val%8) for c in chans])
+
+	@property
+	def frame_size(self):
+		"""
+		Get the size of a frame in bytes.
+		"""
+
+		# Total byte size of a frame
+		return sum(self.channel_sizes)//8
+
+	@property
+	def frame_space(self):
+		"""
+		Return the number of frames available for the currently defined space.
+		This number has nothing to do with the number of frames in the chunk, only total space available to them.
+		"""
+		# Chunk size includes chunk header, WIFFWAVE header, and all the frames
+		chunksz = self.chunk.size
+		# Frame size that includes all channels
+		fsz = self.frame_size
+		# Chunk header size
+		headersz = self._s.offset - self.chunk.offset
+		# WIFFWAVE header size
+		waveheadersz = self._s.lenplan(0,0)
+
+		# Chunk size minus chunk header size minus wave header size is space available to frames
+		fspace = chunksz - headersz - waveheadersz
+
+		# Total space left for frames divided by frame size (integer devision rounds to # of full frames in the space)
+		return fspace // fsz
+
+	@frame_space.setter
+	def frame_space(self, val):
+		"""
+		Set the total number of frames possible to store in this chunk.
+		This will round up to a full 4096 page for the chunk so the actual number of space may be equal or larger than @val.
+		"""
+		raise NotImplementedError
+
+	@property
+	def frame_space_available(self):
+		"""
+		Return the number of available frames that can be put in the remaining space.
+		"""
+		return self.frame_space - self.fidx.len
+
 
 	def add_frame(self, *samps):
 		"""
@@ -1435,7 +1495,6 @@ class WIFFWAVE:
 		# Get channel objects
 		chans = [self.wiff.channels[_] for _ in chans]
 
-
 		# Expand to full bytes and check they match data size
 		chan_size = [c.bit.val + (c.bit.val%8) for c in chans]
 		for i in range(len(samps)):
@@ -1444,6 +1503,7 @@ class WIFFWAVE:
 
 		# Total byte size of a frame
 		frame_size = sum(chan_size)//8
+
 
 		# Map frame into data block
 		s = self.fidx_start
