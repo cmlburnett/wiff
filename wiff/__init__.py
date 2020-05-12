@@ -1281,6 +1281,52 @@ class WIFFANNO:
 		self.fidx_first = min(self.fidx_first, fidx.start)
 		self.fidx_last = max(self.fidx_last, fidx.stop)
 
+	def resize_add_page(self, val):
+		"""
+		Resize this chunk by adding @val pages of 4096 bytes.
+		"""
+
+		if val < 0:
+			raise ValueError("Cannot shrink chunk by negative pages: %d" % val)
+
+		self.resize_add(val * 4096)
+
+	def resize_add(self, val):
+		"""
+		Resize this chunk by adding @val to the current size in bytes.
+		If not a multiple of 4096 byte pages, it will be rounded up to the full page.
+		"""
+
+		if val < 0:
+			raise ValueError("Cannot shrink chunk by negative bytes: %d" % val)
+
+		# Take current size and add the supplied value
+		self.resize(self.chunk.size + val)
+
+	def resize(self, new_size):
+		"""
+		Resize this chunk to @val bytes.
+		If not a multiple of 4096 byte pages, it will be rounded up to the full page.
+		"""
+
+		if new_size < self.chunk.size:
+			raise ValueError("Cannot shrink chunk: %d" % val)
+
+		# Get number of 4096 pages
+		z = divmod(new_size, 4096)
+		if z[1] != 0:
+			# If a partial page, then incremeent to a full page
+			pgs = z[0] + 1
+		else:
+			# Requested just the right number of frames to fill a full page (kudos)
+			pgs = z[0]
+
+		# Get new chunk size in bytes (4096 bytes per page)
+		new_size = pgs * 4096
+
+		# Actually resize the chunk
+		WIFF_chunk.ResizeChunk(self.chunk, new_size)
+
 class WIFFWAVE:
 	"""
 	Helper class that interfaces the data portion of a WIFFWAVE chunk.
@@ -1539,15 +1585,17 @@ class WIFFWAVE:
 		# Get number of 4096 pages
 		z = divmod(new_frames_sz, 4096)
 		if z[1] != 0:
+			# If a partial page, then incremeent to a full page
 			pgs = z[0] + 1
 		else:
+			# Requested just the right number of frames to fill a full page (kudos)
 			pgs = z[0]
 
 		# Get new chunk size in bytes (4096 bytes per page)
-		newsz = pgs * 4096
+		new_size = pgs * 4096
 
 		# Actually resize the chunk
-		WIFF_chunk.ResizeChunk(self.chunk, newsz)
+		WIFF_chunk.ResizeChunk(self.chunk, new_size)
 
 	@property
 	def frame_space_available(self):
