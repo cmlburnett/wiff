@@ -1526,7 +1526,7 @@ class WIFFWAVE:
 		"""
 		cur = self.frame_space
 		if cur == val:
-			# NOP
+			# NOP: rare case requested frame space is what's already present
 			return
 		elif val < cur:
 			raise ValueError("Cannot shrink chunk size (currently %d, requested %d)" % (cur, val))
@@ -1554,6 +1554,7 @@ class WIFFWAVE:
 		"""
 		Return the number of available frames that can be put in the remaining space.
 		"""
+		# Numer of total frames available less number of frames present is the number of frames available
 		return self.frame_space - self.fidx.len
 
 
