@@ -201,6 +201,7 @@ DATE_FMT = "%Y%m%d %H%M%S.%f"
 WIFF_VERSION = 1
 
 def twotuplecheck(x):
+	"""Coerce a two-tuple of integers into an interval"""
 	if isinstance(x, tuple):
 		if len(x) == 2 and isinstance(x[0], int) and isinstance(x[1], int):
 			return bstruct.interval(*x)
@@ -824,6 +825,63 @@ class WIFF_chunk:
 			off += p['size']
 
 		return chunks
+
+	@staticmethod
+	def ResizeChunk(chk, new_size):
+		"""
+		Resize the chunk @chk to the new size indicated @new_size in bytes.
+		If not the last chunk in the file, then everything after it must be moved
+		"""
+
+		# Work only in pages
+		if new_size % 4096 != 0:
+			raise ValueError("New size for a chunk must be in an increment of 4096: %d" % new_size)
+
+		if chk.size == new_size:
+			# NOP: done already...
+			return
+		elif chk.size > new_size:
+			raise ValueError("Cannot shrink chunk size (currently %d, requested %d)" % (cur, val))
+
+		# Current file size in bytes
+		fsize = os.path.getsize(chk._s.fw.fname)
+
+		# Size to increment by
+		delta = new_size - chk.size
+
+		# Get in pages
+		## Start is the page start of this chunk
+		pg_chk_start = chk.offset // 4096
+		## Page offset of the page after the end of this chunk
+		pg_chk_end = (chk.offset + chk.size) // 4096
+		## Total size in pages
+		pg_total = fsize // 4096
+
+		# Increase file size
+		chk._s.fw.resize_add(delta)
+
+		# If not the last chunk, then need to move pages
+		if fsize > chk.offset + chk.size:
+			# Have to iterate backward overwise pages could overwrite
+			# If moving pages 3 & 4 (eg, range(3,5)) then have to iterate 4 then 3 (eg, range(5-1,4-1,-1)
+			for i in range(pg_total-1, pg_chk_end-1, -1):
+				# Old offset is the start of the page
+				of_old = i*4096
+				# New offset is the delta of the new pages
+				of_new = i*4096 + delta
+				# Move the page
+				chk._s.fw[of_new:of_new+4096] = chk._s.fw[of_old:of_old+4096]
+		else:
+			# Chunk at end; nothing to move (just expand the chunk and file at the end)
+			pass
+
+		for i in range(pg_chk_end, pg_chk_end+(delta//4096)):
+			# Blank the now vacant page (strictly not necessary as data within a chunk shouldn't be parsed
+			# but blank it anyway for good measure)
+			chk._s.fw[i*4096:(i+1)*4096] = b'\0'*4096
+
+		# Record the chunk size as bigger
+		chk.size = new_size
 
 class WIFFINFO:
 	"""
@@ -1466,7 +1524,30 @@ class WIFFWAVE:
 		Set the total number of frames possible to store in this chunk.
 		This will round up to a full 4096 page for the chunk so the actual number of space may be equal or larger than @val.
 		"""
-		raise NotImplementedError
+		cur = self.frame_space
+		if cur == val:
+			# NOP
+			return
+		elif val < cur:
+			raise ValueError("Cannot shrink chunk size (currently %d, requested %d)" % (cur, val))
+
+
+		# Frame size that includes all channels
+		fsz = self.frame_size
+		new_frames_sz = val * fsz
+
+		# Get number of 4096 pages
+		z = divmod(new_frames_sz, 4096)
+		if z[1] != 0:
+			pgs = z[0] + 1
+		else:
+			pgs = z[0]
+
+		# Get new chunk size in bytes (4096 bytes per page)
+		newsz = pgs * 4096
+
+		# Actually resize the chunk
+		WIFF_chunk.ResizeChunk(self.chunk, newsz)
 
 	@property
 	def frame_space_available(self):
