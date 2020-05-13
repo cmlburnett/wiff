@@ -500,7 +500,7 @@ class WIFF:
 			if chunk.fidx_start > i:
 				continue
 
-			while i <= chunk.fidx_end:
+			while i < chunk.fidx_end:
 				# Get relative offset in the chunk and get frame
 				off = i - chunk.fidx_start
 				bs = chunk[off]
