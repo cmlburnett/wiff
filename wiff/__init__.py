@@ -526,10 +526,15 @@ class WIFF:
 		self._current_file = self._files[fname]
 		self._current_segment = None
 
-	def set_segment(self, segmentid):
+	def set_segment(self, segment):
 		"""
 		Change the current segment
 		"""
+		if isinstance(segment, int):
+			raise NotImplementedError
+		elif isinstance(segment, WIFFWAVE):
+			raise NotImplementedError
+
 		raise NotImplementedError
 
 	def new_file(self, fname):
