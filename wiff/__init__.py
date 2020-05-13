@@ -526,6 +526,8 @@ class WIFF:
 		self._current_file = self._files[fname]
 		self._current_segment = None
 
+		return self._current_file
+
 	def set_segment(self, segment):
 		"""
 		Change the current segment
@@ -533,9 +535,12 @@ class WIFF:
 		if isinstance(segment, int):
 			raise NotImplementedError
 		elif isinstance(segment, WIFFWAVE):
+			self._current_file = segment.fw
+			self._current_segment = segment
+		else:
 			raise NotImplementedError
 
-		raise NotImplementedError
+		return self._current_segment
 
 	def new_file(self, fname):
 		"""
@@ -577,6 +582,7 @@ class WIFF:
 		"""
 		Start a new segment in the current file
 		"""
+
 		if self._current_file is None:
 			raise ValueError("Must set active file before creating a new segment")
 
@@ -610,6 +616,8 @@ class WIFF:
 
 		# Current segment
 		self._current_segment = w
+
+		return w
 
 	def add_frame(self, *samps):
 		"""
@@ -1435,8 +1443,20 @@ class WIFFWAVE:
 		Initialize a new header
 		"""
 
+		chans_nums = []
+		chans_structs = []
+		for c in channels:
+			if isinstance(c, int):
+				chans_nums.append(c)
+				chans_structs.append( self.wiff.channels[c] )
+			elif isinstance(c, channel_struct):
+				chans_nums.append(c.index.val)
+				chans_structs.append(c)
+			else:
+				raise TypeError("Unknown channel type provided: '%s'" % type(c))
+
 		# Get just the indices
-		indices = [c.index.val for c in channels]
+		indices = chans_nums
 		# Make a bitfield of it
 		b = bitfield()
 		# Make 256 bits wide
@@ -1449,7 +1469,7 @@ class WIFFWAVE:
 		self.fidx_end = fidx_end
 
 		# Expand to full bytes and check they match data size
-		chan_size = [c.bit.val + (c.bit.val%8) for c in channels]
+		chan_size = [c.bit.val + (c.bit.val%8) for c in chans_structs]
 
 		# Total byte size of a frame
 		frame_size = sum(chan_size)//8
@@ -1622,6 +1642,9 @@ class WIFFWAVE:
 		#FIXME: just a temp
 		samps = frames[0]
 
+		if self.frame_space_available < len(frames):
+			raise NeedResizeException("Cannot add frames, not enough space")
+
 		chans = self.channels
 
 		if len(chans) != len(samps):
@@ -1656,12 +1679,7 @@ class WIFFWAVE:
 			delta += 1
 
 		# Assign frame
-		try:
-			self._s.records[delta] = b''.join(samps)
-		except NeedResizeException:
-			self.chunk.size += 4096
-			self._s.fw.resize_add(4096)
-			self._s.records[delta] = b''.join(samps)
+		self._s.records[delta] = b''.join(samps)
 
 		if frame_num == 0:
 			self.fidx_start = frame_num
