@@ -14,7 +14,7 @@ Terminology
 * A recording is broken into segments consisting of multiple frames
 * A frame consists of samples across all present channels in a segment at a given point in time
 * A channel is a specific binary data source of data that is piece-wise present (not present sample-by-sample, but over a continous time period)
-* Time index is the index into the frames from zero (start of recording) to N (last frame of the recording)
+* Frame index is the index into the frames from zero (start of recording) to N (last frame of the recording)
 * An annotation is a marker associated to a frame or frames that gives meaning beyond the raw binary data; interpretive information
 
 Assumptions
@@ -41,8 +41,16 @@ WIFF chunk format
 
 Chunks
 	It is encouraged to put chunk boundaries on 4096 byte blocks, or larger.
-	This permits modifying a file in place without having to rewrite the entire file.
+	This permits modifying a file in place without having to rewrite the entire file for small edits.
 	If streaming to the end of a chunk then this matters less.
+
+	Chunks can be sequential in the same file, or can be split into different files.
+	How chunks are organized is up to the caller.
+	It is possible to use one file for information, waveform, and annotations.
+
+	All byte indices used within are relative to the chunk data itself.
+	Thus, if a chunk in its entirety is shifting within a file then no updates are needed
+	 to a chunk to keep it consistent.
 
 
 	WIFFINFO -- Information
@@ -50,7 +58,7 @@ Chunks
 		[0] -- Version of WIFF
 		[1-7] -- Reserved
 
-	Info chunk that is used to coordinate high-level information.
+	Info chunk that is used to coordinate high-level information and the organization of the recording.
 
 	Data
 		[0:1] -- Byte index of start time string
@@ -181,6 +189,17 @@ Chunks
 		[16:19] -- 4 character marker
 		[20:27] -- 8 byte data value associated with the marker
 
+All data is read/written using mmap without intermediate/buffered data in this library.
+Doing this avoids issues of consistency as all modifications are written directly to the files
+ and paging is handled by the OS.
+It is encouraged to cache values locally in the code calling this module to avoid repeatedly parsing the same binary data.
+This is intended because it is the caller that knows best what information is being re-used and where optimization
+ can be done to minimize file operations.
+
+Parsing of the files is done with a custom struct module called bstruct.
+Each binary structure is defined as a separate class and the grunt work of packing and unpacking these binary
+ structures is done in the background.
+Keeping track of offsets within the file is tedious, and this layering makes handling offsets a breeze.
 """
 
 import datetime
