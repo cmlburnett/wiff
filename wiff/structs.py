@@ -6,6 +6,10 @@ class chunk_struct(metaclass=bstructmeta):
 		'size': member_8(8),
 		'attributes': member_8(16),
 	}
+	@staticmethod
+	def lenplan(size):
+		# Size is the whole chunk, nothing difficult here
+		return size
 
 class channel_struct(metaclass=bstructmeta):
 	"""
@@ -211,4 +215,27 @@ class annos_struct(metaclass=bstructmeta):
 		'annotations_jumplist': member_jumptable('index_annotations', 'num_annotations', 'annotations'),
 		'annotations': member_list(ann_struct, 'annotations_jumplist'),
 	}
+	@staticmethod
+	def lenplan(annos):
+		ret = 36
+		ln = len(annotations)
+
+		ret += ln * 4
+		d,r = divmod(ret, 4096)
+		if r != 0:
+			d += 1
+
+		# Round to the nearest page
+		ret = d * 4096
+
+		# Sum up the annotations
+		z = sum([ann_struct(_) for _ in annos])
+		d,r = divmod(z, 4096)
+		if r != 0:
+			d += 1
+
+		# Round annotations to the nearest page
+		ret += d *4096
+
+		return ret
 
