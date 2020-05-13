@@ -619,6 +619,12 @@ class WIFF:
 
 		return w
 
+	def add_frames(self, *frames):
+		"""
+		Add frames of samples to the current segment
+		"""
+		return self._current_segment.add_frames(*frames)
+
 	def add_frame(self, *samps):
 		"""
 		Add a frame of samples to the current segment
@@ -1639,25 +1645,30 @@ class WIFFWAVE:
 		return self.add_frames(samps)
 
 	def add_frames(self, *frames):
-		#FIXME: just a temp
-		samps = frames[0]
+		"""
+		Add a set of frames
+		"""
 
 		if self.frame_space_available < len(frames):
 			raise NeedResizeException("Cannot add frames, not enough space")
 
 		chans = self.channels
+		len_chans = len(chans)
 
-		if len(chans) != len(samps):
-			raise ValueError("Mismatch between samples (%d) and number of channels (%d)" % (len(samps),len(chans)))
+		for i in range(len(frames)):
+			if len(frames[i]) != len_chans:
+				raise ValueError("Mismatch between samples (%d) and number of channels (%d) for frame %d" % (len(frames[i]),len_chans,i))
 
 		# Get channel objects
 		chans = [self.wiff.channels[_] for _ in chans]
 
 		# Expand to full bytes and check they match data size
 		chan_size = [c.bit.val + (c.bit.val%8) for c in chans]
-		for i in range(len(samps)):
-			if chan_size[i] != len(samps[i])*8:
-				raise ValueError("Sample for channel %d is %d bytes but channel is %d bytes (%d bits)" % (chans[i].index, len(samps[i]), chan_size[i], chans[i].bit))
+		for j in range(len(frames)):
+			samps = frames[j]
+			for i in range(len(samps)):
+				if chan_size[i] != len(samps[i])*8:
+					raise ValueError("Sample %d for channel %d is %d bytes but channel is %d bytes (%d bits)" % (j,chans[i].index, len(samps[i]), chan_size[i], chans[i].bit))
 
 		# Total byte size of a frame
 		frame_size = sum(chan_size)//8
@@ -1669,21 +1680,26 @@ class WIFFWAVE:
 		delta = e - s
 
 
-		# Determine frame number
+		# Determine frame number for next frame-to-be-added
 		frame_num = self.wiff.num_frames
 
-		# Fringe case of no frames, thus s == 0, e == 0, delta == 0
+		# Edge case of no frames, thus s == 0, e == 0, delta == 0
 		# and with 1 frame thus s == 0, e == 0, delta == 0 and frame 1 overwrites frames 0
 		# The differentiating factor between these cases is that num_frames is non-zero
-		if frame_num != 0:
-			delta += 1
 
-		# Assign frame
-		self._s.records[delta] = b''.join(samps)
+		for i in range(len(frames)):
+			samps = frames[i]
 
+			# Assign frame
+			self._s.records[delta+i] = b''.join(samps)
+
+		# If this is the first frame, then need to set the start
 		if frame_num == 0:
 			self.fidx_start = frame_num
-		self.fidx_end = frame_num
 
-		self.wiff.num_frames = frame_num + 1
+		# Add number of frames to the end
+		self.fidx_end = frame_num + len(frames)
+
+		# Increment
+		self.wiff.num_frames = frame_num + len(frames)
 
