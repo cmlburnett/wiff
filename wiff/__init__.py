@@ -205,7 +205,9 @@ Keeping track of offsets within the file is tedious, and this layering makes han
 import datetime
 import json
 import mmap
+import os
 import os.path
+import sys
 import struct
 import types
 
@@ -231,13 +233,14 @@ def twotuplecheck(x):
 	else:
 		raise TypeError("Not a 2-tuple or an interval")
 
-class WIFF:
+def open(fname):
 	"""
-	Primary interface class to a WIFF recording.
-	All interactions should occur through this class.
-	Supply the primary WIFF file that contains the information for the recording
-	If creating a new file, properties in @props is needed to start the recording.
+	Open an existing WIFF file.
+	"""
+	return WIFF.open(fname)
 
+def new(fname, props, force=False):
+	"""
 	@props -- dictionary including:
 		'start'			datetime objects
 		'end'			datetime objects
@@ -250,7 +253,23 @@ class WIFF:
 			'comment'		Arbitrary comment on the channel
 		'files'			list of files, probably empty for a new recording
 	"""
-	def __init__(self, fname, props=None):
+	return WIFF.new(fname, props, force)
+
+class WIFF:
+	"""
+	Primary interface class to a WIFF recording.
+	All interactions should occur through this class.
+	Supply the primary WIFF file that contains the information for the recording
+	If creating a new file, properties in @props is needed to start the recording.
+
+	"""
+	def __init__(self):
+		"""
+		Create a empty WIFF object.
+		Call open() or new() to open an existing WIFF file or to create a new one, respectively.
+		This is not meant to be called directly.
+		"""
+
 		self._files = {}
 		self._chunks = {}
 
@@ -258,10 +277,29 @@ class WIFF:
 		self._current_segment = None
 		self._current_annogations = None
 
-		if os.path.exists(fname):
-			self._open_existing(fname)
-		else:
-			self._open_new(fname, props)
+	@classmethod
+	def open(cls, fname):
+		"""
+		Open an existing WIFF file.
+		"""
+		return cls._open_existing(fname)
+
+	@classmethod
+	def new(cls, fname, props, force):
+		"""
+		@props -- dictionary including:
+			'start'			datetime objects
+			'end'			datetime objects
+			'description'	string describing the recording
+			'fs'			sampling frequency (int)
+			'channels'		list of channels
+				'name'			name of the channel
+				'bit'			bits (int) of each measurement
+				'unit'			physical units of the measurement (str)
+				'comment'		Arbitrary comment on the channel
+			'files'			list of files, probably empty for a new recording
+		"""
+		return cls._open_new(fname, props, force)
 
 	@property
 	def fs(self): return self._chunks['INFO'].fs
@@ -322,16 +360,36 @@ class WIFF:
 		for fname,o in self._files.items():
 			o.close()
 
-	def _open_new(self, fname, props):
-		# Blank all files
-		self._fname = fname
-		self._files.clear()
-		self._chunks.clear()
+	@classmethod
+	def _open_new(cls, fname, props, force):
+		if os.path.exists(fname):
+			if not force:
+				raise Exception("File '%s' exists, cannot open; pass force=True to override" % fname)
 
-		self._chunks[fname] = []
+			# Have to open it to find all the files linked with it to completely delete it
+			files = None
+			try:
+				w = cls(fname)
+				for f in w.files:
+					raise NotImplementedError
+			except Exception as e:
+				pass
+			if files is None:
+				# Likely this isn't a WIFF file so delete just it
+				os.unlink(fname)
+			else:
+				pass
+
+		# Make a shell object
+		w = cls()
+
+		# Blank all files
+		w._fname = fname
+
+		w._chunks[fname] = []
 
 		# Wrap file
-		f = self._files[fname] = _filewrap(fname)
+		f = w._files[fname] = _filewrap(fname)
 		# Initial 4096 block
 		f.resize(4096)
 
@@ -347,44 +405,51 @@ class WIFF:
 		})
 
 		c = WIFF_chunk(f, 0)
-		w = WIFFINFO(self, f, c)
-		w.initchunk()
-		w.initheader(props['start'], props['end'], props['description'], props['fs'], 0,0, props['channels'], props['files'])
+		wi = WIFFINFO(w, f, c)
+		wi.initchunk()
+		wi.initheader(props['start'], props['end'], props['description'], props['fs'], 0,0, props['channels'], props['files'])
 
 
-		self._chunks[fname] = [w]
-		self._chunks['INFO'] = w
+		w._chunks[fname] = [wi]
+		w._chunks['INFO'] = wi
 
-	def _open_existing(self, fname):
+		return w
+
+	@classmethod
+	def _open_existing(cls, fname):
+		w = cls()
+
 		# Blank all files
-		self._fname = fname
-		self._files.clear()
-		self._chunks.clear()
-		self._chunks[fname] = []
+		w._fname = fname
+		w._files.clear()
+		w._chunks.clear()
+		w._chunks[fname] = []
 
 		# Wrap file
-		f = self._files[fname] = _filewrap(fname)
+		f = w._files[fname] = _filewrap(fname)
 
 		chunks = WIFF_chunk.FindChunks(f.f)
 		for chunk in chunks:
 			c = WIFF_chunk(f, chunk['offset header'])
 			if chunk['magic'] == 'WIFFINFO':
-				w = WIFFINFO(self, f, c)
-				self._chunks[fname].append(w)
+				wi = WIFFINFO(w, f, c)
+				w._chunks[fname].append(wi)
 
-				if 'INFO' in self._chunks:
+				if 'INFO' in w._chunks:
 					raise NotImplementedError("Multiple WAVEINFO chunks is not supported")
-				self._chunks['INFO'] = w
+				w._chunks['INFO'] = wi
 			elif chunk['magic'] == 'WIFFWAVE':
-				w = WIFFWAVE(self, f, c)
-				w.setup()
-				self._chunks[fname].append(w)
+				ww = WIFFWAVE(w, f, c)
+				ww.setup()
+				w._chunks[fname].append(ww)
 			elif chunk['magic'] == 'WIFFANNO':
-				w = WIFFANNO(self, f, c)
-				self._chunks[fname].append(w)
+				wa = WIFFANNO(self, f, c)
+				w._chunks[fname].append(wa)
 
 			else:
 				raise TypeError('Uknown chunk magic: %s' % chunk['magic'])
+
+		return w
 
 	# Get all matching chunks
 	def _GetINFO(self): return self._GetChunks('WIFFINFO')
@@ -561,11 +626,24 @@ class WIFF:
 
 		return self._current_segment
 
-	def new_file(self, fname):
+	def new_file(self, fname, force=False):
 		"""
-		Start a new WIFFWAVE file and segment in that file
+		Start a new file without any segments
 		"""
-		raise NotImplementedError
+		if fname in self._files:
+			raise Exception("File '%s' is already associated with this WIFF file, cannot create it" % fname)
+
+		if os.path.exists(fname):
+			if not force:
+				raise Exception("File '%s' exists, cannot open; pass force=True to override" % fname)
+
+			# Truncate file
+			os.truncate(fname, 0)
+
+		else:
+			pass
+
+		self._files[fname] = []
 
 	def new_annotations(self):
 		"""
@@ -747,13 +825,15 @@ class _filewrap:
 	def __init__(self, fname):
 		""" Wrap the file with name @fname """
 		if not os.path.exists(fname):
-			f = open(fname, 'wb')
+			# Have to call open this way as it otherwise means the function defined above
+			f = __builtins__['open'](fname, 'wb')
 			# Have to write something to memory map it
 			f.write(b'0')
 			f.close()
 
 		self.fname = fname
-		self.f = open(fname, 'r+b')
+		# Have to call open this way as it otherwise means the function defined above
+		self.f = __builtins__['open'](fname, 'r+b')
 		self.mmap = mmap.mmap(self.f.fileno(), 0)
 		self.size = os.path.getsize(fname)
 
