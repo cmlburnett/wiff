@@ -370,8 +370,9 @@ class WIFF:
 			files = None
 			try:
 				w = cls(fname)
+				print('w')
 				for f in w.files:
-					raise NotImplementedError
+					print(f)
 			except Exception as e:
 				pass
 			if files is None:
@@ -641,9 +642,19 @@ class WIFF:
 			os.truncate(fname, 0)
 
 		else:
-			pass
+			# Cannot map an empty file
+			with __builtins__['open'](fname, 'w+b') as f:
+				f.write(b'\0')
 
-		self._files[fname] = []
+		# Add file
+		f = self._files[fname] = _filewrap(fname)
+		self._chunks[fname] = []
+		self.set_file(fname)
+
+		fidx_start = fidx_end = self.num_frames
+
+		# Add file to INFO chunk
+		self._chunks['INFO'].add_file(fname, fidx_start, fidx_end)
 
 	def new_annotations(self):
 		"""
@@ -1095,29 +1106,13 @@ class WIFFINFO:
 
 
 	def _initfiles(self, files):
-		self.num_files = len(files)
+		self.index_file_end = self.index_file_start
 
-		strt = self._s.files_jumptable.sizeof
+		self.num_files = 0
+
 		for i in range(len(files)):
 			f = files[i]
-
-			sz = file_struct.lenplan(f['name'])
-
-			self._s.files_jumptable[i] = (strt, strt+sz)
-			strt += sz
-
-
-			off = file_struct.lenplan("")
-
-			self._s.files[i].index.val = i
-			self._s.files[i].index_name_start.val = off
-			self._s.files[i].index_name_end.val = off + len(f['name'])
-			self._s.files[i].fidx_start.val = f['fidx_start']
-			self._s.files[i].fidx_end.val = f['fidx_end']
-			self._s.files[i].name.val = f['name']
-
-		# Get the last byte used for the files
-		self.index_file_end = self._s.files_jumptable[-1][1] + self._s.files_jumptable.offset
+			self.add_file(f['name'], f['fidx_start'], f['fidx_end'])
 
 	@property
 	def magic(self): return self.chunk.magic
@@ -1224,6 +1219,45 @@ class WIFFINFO:
 
 	@property
 	def files(self): return self._s.files
+
+	def add_file(self, fname, fidx_start, fidx_end):
+		"""
+		Adds a new file to the list
+		"""
+
+		# Get length of new file entry
+		ln = file_struct.lenplan(fname)
+
+		# Get current size of chunk and end index of last file entry
+		cur_size = self.chunk.size
+		cur_end = self.index_file_end
+
+		# If current end plus new file struct plus 4 for jumptable entry is more than current size, bump it up a page
+		if cur_end + ln + 4 > cur_size:
+			WIFF_chunk.ResizeChunk(self.chunk, cur_size + 4096)
+
+		# Get current number of files, which is also the index of the next jumptable entry
+		fnum = self._s.num_files.val
+
+
+		# Add new entry to the jumptable
+		idx = self._s.files.add(ln, start=12, page=12)
+		entry = self._s.files_jumptable[idx]
+
+		# Offset is relative to jumptable, so add in offset of the jumptable
+		self.index_file_end = entry[1] + self._s.files_jumptable.offset
+
+		# Offset into file_struct where name starts
+		off = file_struct.lenplan("")
+
+		# Set file information
+		self._s.files[fnum].index.val = fnum
+		self._s.files[fnum].index_name_start.val = off
+		self._s.files[fnum].index_name_end.val = off + len(fname)
+		self._s.files[fnum].fidx_start.val = fidx_start
+		self._s.files[fnum].fidx_end.val = fidx_end
+		self._s.files[fnum].name.val = fname
+
 
 class WIFFANNO:
 	"""

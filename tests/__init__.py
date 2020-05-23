@@ -4,6 +4,8 @@ import datetime
 import unittest
 import tempfile
 import os
+import random
+import struct
 
 class SimpleTests(unittest.TestCase):
 	def test_infoheader(self):
@@ -23,7 +25,7 @@ class SimpleTests(unittest.TestCase):
 					],
 					'files': [],
 				}
-				w = wiff.WIFF(fname, props)
+				w = wiff.WIFF.new(fname, props, force=False)
 				self.assertEqual(w.start, s_date)
 				self.assertEqual(w.end, e_date)
 				self.assertEqual(w.description, "hello world")
@@ -53,19 +55,109 @@ class SimpleTests(unittest.TestCase):
 
 
 				# Compare binary data
+				expected_dat = 'WIFFINFO'.encode('ascii')
+				expected_dat += struct.pack("<QQ", 4096, 1)
+				# WIFFINFO header
+				expected_dat += struct.pack("<HHHHHHIHHQQ", 36, 58, 80, 91, 147, 201, 12345, 2, 1, 0, 0)
+				expected_dat += "20010203 040506.070809".encode('ascii')
+				expected_dat += "20101112 131415.161718".encode('ascii')
+				expected_dat += "hello world".encode('ascii')
+				# Channel jumptable
+				expected_dat += struct.pack('<HHHH', 8,32, 32,56)
+				# Channel 0
+				expected_dat += struct.pack('<BHBHHH', 0, 10, 12, 11, 13, 24)
+				expected_dat += "IuVlead test I".encode('ascii')
+				# Channel 1
+				expected_dat += struct.pack('<BHBHHH', 1, 10, 12, 11, 13, 24)
+				expected_dat += "XmAlead test X".encode('ascii')
+				# File jumptable
+				expected_dat += struct.pack('<HH', 12,54)
+				# File 0
+				expected_dat += struct.pack('<HHHH', 0,0,0,0)
+				expected_dat += struct.pack('<BHHQQ', 0, 21, 21+len(fname), 0,0)
+				expected_dat += fname.encode('ascii')
 
-				expected_dat = b'WIFFINFO\x00\x10\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00$\x00:\x00P\x00[\x00\x93\x00\xc1\x0090\x00\x00\x02\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0020010203 040506.07080920101112 131415.161718hello world\x08\x00 \x00 \x008\x00\x00\n\x00\x0c\x0b\x00\r\x00\x18\x00IuVlead test I\x01\n\x00\x0c\x0b\x00\r\x00\x18\x00XmAlead test X\x04\x00.\x00\x00\x15\x00*\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00' + fname.encode('ascii')
-				# Pad with zeros to a full page
-				expected_dat += b'\0' * (4096-len(expected_dat))
+				# Make HEX (easier to view diff strings than binary)
+				expected_dat = expected_dat.hex()
 
 				with open(fname, 'rb') as g:
 					dat = g.read()
+				self.maxDiff = None
 				self.assertEqual(len(dat), 4096)
-				# Verify binary of the chunk header
-				self.assertEqual(dat[0:24], expected_dat[0:24])
-				# Verify binary of the chunk data
-				self.assertEqual(dat, expected_dat)
-
+				# Compare non-zero data
+				self.assertEqual(dat.hex()[0:len(expected_dat)], expected_dat)
+				# Compare zero data to make sure remainder of binary data is actually zero
+				self.assertEqual(dat.hex()[len(expected_dat):], '0'*(8192-len(expected_dat)))
 			finally:
 				os.unlink(fname)
+
+	def test_multifile(self):
+		with tempfile.NamedTemporaryFile() as f:
+			fname1 = f.name + '.wiff'
+			fname2 = f.name + '-2.wiff'
+			try:
+				random.seed(0)
+
+				s_date = "20010203 040506.070809"
+				e_date = "20101112 131415.161718"
+				props = {
+					'start': datetime.datetime.strptime(s_date, "%Y%m%d %H%M%S.%f"),
+					'end':   datetime.datetime.strptime(e_date, "%Y%m%d %H%M%S.%f"),
+					'description': "hello world",
+					'fs': 12345,
+					'channels': [
+						{'name': 'I', 'bit': 12, 'unit': 'uV', 'comment': 'lead test I'},
+						{'name': 'X', 'bit': 12, 'unit': 'mA', 'comment': 'lead test X'},
+					],
+					'files': [],
+				}
+				w = wiff.WIFF.new(fname1, props, force=False)
+				w.set_file(fname1)
+				w.new_segment([0,1], segmentid=1)
+
+				for i in range(10):
+					w.add_frame(struct.pack(">H", random.getrandbits(12)), struct.pack(">H", random.getrandbits(12)))
+
+				#w.new_file(fname2)
+
+				self.assertTrue(os.path.exists(fname1))
+				#self.assertTrue(os.path.exists(fname2))
+
+				expected_dat = 'WIFFINFO'.encode('ascii')
+				expected_dat += struct.pack("<QQ", 4096, 1)
+				# WIFFINFO header
+				expected_dat += struct.pack("<HHHHHHIHHQQ", 36, 58, 80, 91, 147, 201, 12345, 2, 1, 10, 0)
+				expected_dat += "20010203 040506.070809".encode('ascii')
+				expected_dat += "20101112 131415.161718".encode('ascii')
+				expected_dat += "hello world".encode('ascii')
+				# Channel jumptable
+				expected_dat += struct.pack('<HHHH', 8,32, 32,56)
+				# Channel 0
+				expected_dat += struct.pack('<BHBHHH', 0, 10, 12, 11, 13, 24)
+				expected_dat += "IuVlead test I".encode('ascii')
+				# Channel 1
+				expected_dat += struct.pack('<BHBHHH', 1, 10, 12, 11, 13, 24)
+				expected_dat += "XmAlead test X".encode('ascii')
+				# File jumptable
+				expected_dat += struct.pack('<HH', 12,54)
+				# File 0
+				expected_dat += struct.pack('<HHHH', 0,0,0,0)
+				expected_dat += struct.pack('<BHHQQ', 0, 21, 21+len(fname1), 0,10)
+				expected_dat += fname1.encode('ascii')
+				# Make HEX (easier to view diff strings than binary)
+				expected_dat = expected_dat.hex()
+
+				with open(fname1, 'rb') as g:
+					dat = g.read()
+				self.maxDiff = None
+				self.assertEqual(len(dat), 8192)
+				# Compare non-zero data
+				self.assertEqual(dat.hex()[0:len(expected_dat)], expected_dat)
+				# Compare zero data to make sure remainder of binary data is actually zero
+				self.assertEqual(dat.hex()[len(expected_dat):4096], '0'*(4096-len(expected_dat)))
+
+
+			finally:
+				os.unlink(fname1)
+				#os.unlink(fname2)
 
