@@ -51,6 +51,10 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(w.channels[1].bit.val, 12)
 				self.assertEqual(w.channels[1].comment.val, "lead test X")
 
+				self.assertEqual(w.files[0].fidx_start.val, 0)
+				self.assertEqual(w.files[0].fidx_end.val, 0)
+				self.assertEqual(w.files[0].name.val, fname)
+
 				w.close()
 
 
@@ -118,15 +122,50 @@ class SimpleTests(unittest.TestCase):
 				for i in range(10):
 					w.add_frame(struct.pack(">H", random.getrandbits(12)), struct.pack(">H", random.getrandbits(12)))
 
-				#w.new_file(fname2)
+				w.new_file(fname2)
+
 
 				self.assertTrue(os.path.exists(fname1))
-				#self.assertTrue(os.path.exists(fname2))
+				self.assertTrue(os.path.exists(fname2))
+
+				self.assertEqual(w.start, s_date)
+				self.assertEqual(w.end, e_date)
+				self.assertEqual(w.description, "hello world")
+				self.assertEqual(w.fs, 12345)
+				self.assertEqual(w.num_channels, 2)
+				self.assertEqual(w.num_files, 2)
+				self.assertEqual(w.num_frames, 10)
+				self.assertEqual(w.num_annotations, 0)
+
+				self.assertEqual(w._chunks['INFO'].chunk.offset, 0)
+				self.assertEqual(w._chunks['INFO'].chunk.magic, "WIFFINFO")
+				self.assertEqual(w._chunks['INFO'].chunk.size, 4096)
+
+				self.assertEqual(w._chunks['INFO'].offset, 24)
+
+				self.assertEqual(w.channels[0].name.val, "I")
+				self.assertEqual(w.channels[0].unit.val, "uV")
+				self.assertEqual(w.channels[0].bit.val, 12)
+				self.assertEqual(w.channels[0].comment.val, "lead test I")
+
+				self.assertEqual(w.channels[1].name.val, "X")
+				self.assertEqual(w.channels[1].unit.val, "mA")
+				self.assertEqual(w.channels[1].bit.val, 12)
+				self.assertEqual(w.channels[1].comment.val, "lead test X")
+
+				self.assertEqual(w.files[0].fidx_start.val, 0)
+				self.assertEqual(w.files[0].fidx_end.val, 10)
+				self.assertEqual(w.files[0].name.val, fname1)
+
+				self.assertEqual(w.files[1].fidx_start.val, 10)
+				self.assertEqual(w.files[1].fidx_end.val, 10)
+				self.assertEqual(w.files[1].name.val, fname2)
+
 
 				expected_dat = 'WIFFINFO'.encode('ascii')
 				expected_dat += struct.pack("<QQ", 4096, 1)
 				# WIFFINFO header
-				expected_dat += struct.pack("<HHHHHHIHHQQ", 36, 58, 80, 91, 147, 201, 12345, 2, 1, 10, 0)
+				expected_dat += struct.pack("<HHHHHHIHHQQ", 36, 58, 80, 91, 147, 245, 12345, 2, 2, 10, 0)
 				expected_dat += "20010203 040506.070809".encode('ascii')
 				expected_dat += "20101112 131415.161718".encode('ascii')
 				expected_dat += "hello world".encode('ascii')
@@ -139,13 +178,17 @@ class SimpleTests(unittest.TestCase):
 				expected_dat += struct.pack('<BHBHHH', 1, 10, 12, 11, 13, 24)
 				expected_dat += "XmAlead test X".encode('ascii')
 				# File jumptable
-				expected_dat += struct.pack('<HH', 12,54)
+				expected_dat += struct.pack('<HHHH', 12,54, 54,98)
+				expected_dat += struct.pack('<HH', 0,0)
 				# File 0
-				expected_dat += struct.pack('<HHHH', 0,0,0,0)
 				expected_dat += struct.pack('<BHHQQ', 0, 21, 21+len(fname1), 0,10)
 				expected_dat += fname1.encode('ascii')
+				# File 1
+				expected_dat += struct.pack('<BHHQQ', 1, 21, 21+len(fname2), 10,10)
+				expected_dat += fname2.encode('ascii')
 				# Make HEX (easier to view diff strings than binary)
 				expected_dat = expected_dat.hex()
+
 
 				with open(fname1, 'rb') as g:
 					dat = g.read()
@@ -157,7 +200,8 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(dat.hex()[len(expected_dat):4096], '0'*(4096-len(expected_dat)))
 
 
+
 			finally:
 				os.unlink(fname1)
-				#os.unlink(fname2)
+				os.unlink(fname2)
 
