@@ -123,6 +123,10 @@ class SimpleTests(unittest.TestCase):
 					w.add_frame(struct.pack(">H", random.getrandbits(12)), struct.pack(">H", random.getrandbits(12)))
 
 				w.new_file(fname2)
+				w.new_segment([0,1], segmentid=2)
+
+				for i in range(10):
+					w.add_frame(struct.pack(">H", random.getrandbits(12)), struct.pack(">H", random.getrandbits(12)))
 
 
 				self.assertTrue(os.path.exists(fname1))
@@ -134,7 +138,7 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(w.fs, 12345)
 				self.assertEqual(w.num_channels, 2)
 				self.assertEqual(w.num_files, 2)
-				self.assertEqual(w.num_frames, 10)
+				self.assertEqual(w.num_frames, 20)
 				self.assertEqual(w.num_annotations, 0)
 
 				self.assertEqual(w._chunks['INFO'].chunk.offset, 0)
@@ -158,14 +162,14 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(w.files[0].name.val, fname1)
 
 				self.assertEqual(w.files[1].fidx_start.val, 10)
-				self.assertEqual(w.files[1].fidx_end.val, 10)
+				self.assertEqual(w.files[1].fidx_end.val, 20)
 				self.assertEqual(w.files[1].name.val, fname2)
 
 
 				expected_dat = 'WIFFINFO'.encode('ascii')
 				expected_dat += struct.pack("<QQ", 4096, 1)
 				# WIFFINFO header
-				expected_dat += struct.pack("<HHHHHHIHHQQ", 36, 58, 80, 91, 147, 245, 12345, 2, 2, 10, 0)
+				expected_dat += struct.pack("<HHHHHHIHHQQ", 36, 58, 80, 91, 147, 245, 12345, 2, 2, 20, 0)
 				expected_dat += "20010203 040506.070809".encode('ascii')
 				expected_dat += "20101112 131415.161718".encode('ascii')
 				expected_dat += "hello world".encode('ascii')
@@ -184,7 +188,7 @@ class SimpleTests(unittest.TestCase):
 				expected_dat += struct.pack('<BHHQQ', 0, 21, 21+len(fname1), 0,10)
 				expected_dat += fname1.encode('ascii')
 				# File 1
-				expected_dat += struct.pack('<BHHQQ', 1, 21, 21+len(fname2), 10,10)
+				expected_dat += struct.pack('<BHHQQ', 1, 21, 21+len(fname2), 10,20)
 				expected_dat += fname2.encode('ascii')
 				# Make HEX (easier to view diff strings than binary)
 				expected_dat = expected_dat.hex()

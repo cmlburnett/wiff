@@ -704,14 +704,17 @@ class WIFF:
 		# Get last chunk
 		fname = self._current_file.fname
 		cs = self._chunks[fname]
-		lastchunk = cs[-1].chunk
+		if len(cs) == 0:
+			# No chunks yet (shouldn't happen on main file, but can happen just after new_file)
+			c = WIFF_chunk(self._current_file, 0)
+		else:
+			lastchunk = cs[-1].chunk
 
-		# End of the last chunk (offset + size) is where the next block begins
-		nextoff = lastchunk.offset + lastchunk.size
+			# End of the last chunk (offset + size) is where the next block begins
+			nextoff = lastchunk.offset + lastchunk.size
 
-
-		# Create new chunk
-		c = WIFF_chunk(self._current_file, nextoff)
+			# Create new chunk
+			c = WIFF_chunk(self._current_file, nextoff)
 
 		# Create chunk data
 		self._current_file.resize_add(4096)
