@@ -50,11 +50,13 @@ class file_struct(metaclass=bstructmeta):
 		'index_name_end': member_ref(3),
 		'fidx_start': member_8(5),
 		'fidx_end': member_8(13),
+		'aidx_start': member_8(21),
+		'aidx_end': member_8(29),
 		'name': member_str('index_name_start', 'index_name_end'),
 	}
 	@staticmethod
 	def lenplan(name):
-		ret = 21
+		ret = 37
 
 		for v in [name]:
 			if isinstance(v, str):

@@ -113,8 +113,10 @@ Chunks
 		[1:2] -- Byte index of file name string start
 		[3:4] -- Byte index of file name string end (X)
 		[5:12] -- Start frame index
-		[13:20] -- End frame index (inclusive)
-		[21:X] -- File name string
+		[13:20] -- End frame index
+		[21:28] -- Start annotation index
+		[29:36] -- End annotation index
+		[36:X] -- File name string
 
 
 	WIFFWAVE -- Waveform data
@@ -251,7 +253,7 @@ def new(fname, props, force=False):
 			'bit'			bits (int) of each measurement
 			'unit'			physical units of the measurement (str)
 			'comment'		Arbitrary comment on the channel
-		'files'			list of files, probably empty for a new recording
+		'files'			list of files, probably empty (except for INFO file) for a new recording
 	"""
 	return WIFF.new(fname, props, force)
 
@@ -275,7 +277,7 @@ class WIFF:
 
 		self._current_file = None
 		self._current_segment = None
-		self._current_annogations = None
+		self._current_annotations = None
 
 	@classmethod
 	def open(cls, fname):
@@ -297,7 +299,7 @@ class WIFF:
 				'bit'			bits (int) of each measurement
 				'unit'			physical units of the measurement (str)
 				'comment'		Arbitrary comment on the channel
-			'files'			list of files, probably empty for a new recording
+			'files'			list of files, probably empty (except for INFO file) for a new recording
 		"""
 		return cls._open_new(fname, props, force)
 
@@ -403,6 +405,8 @@ class WIFF:
 			'name': fname,
 			'fidx_start': 0,
 			'fidx_end': 0,
+			'aidx_start': 0,
+			'aidx_end': 0,
 		})
 
 		c = WIFF_chunk(f, 0)
@@ -641,20 +645,16 @@ class WIFF:
 			# Truncate file
 			os.truncate(fname, 0)
 
-		else:
-			# Cannot map an empty file
-			with __builtins__['open'](fname, 'w+b') as f:
-				f.write(b'\0')
-
 		# Add file
 		f = self._files[fname] = _filewrap(fname)
 		self._chunks[fname] = []
 		self.set_file(fname)
 
 		fidx_start = fidx_end = self.num_frames
+		aidx_start = aidx_end = self.num_annotations
 
 		# Add file to INFO chunk
-		self._chunks['INFO'].add_file(fname, fidx_start, fidx_end)
+		self._chunks['INFO'].add_file(fname, fidx_start, fidx_end, aidx_start, aidx_end)
 
 	def new_annotations(self):
 		"""
@@ -665,7 +665,7 @@ class WIFF:
 			raise ValueError("Must set active file before creating a new annotations chunk")
 
 		# Blank current annotations pointer
-		self._current_annogations = None
+		self._current_annotations = None
 
 		# Get last chunk
 		fname = self._current_file.fname
@@ -684,7 +684,7 @@ class WIFF:
 		w.initchunk(None)
 		w.initheader()
 
-		self._current_annogations = w
+		self._current_annotations = w
 
 	def new_segment(self, chans, segmentid=None):
 		"""
@@ -705,9 +705,13 @@ class WIFF:
 		fname = self._current_file.fname
 		cs = self._chunks[fname]
 		if len(cs) == 0:
+			firstsegment = True
+
 			# No chunks yet (shouldn't happen on main file, but can happen just after new_file)
 			c = WIFF_chunk(self._current_file, 0)
 		else:
+			firstsegment = False
+
 			lastchunk = cs[-1].chunk
 
 			# End of the last chunk (offset + size) is where the next block begins
@@ -717,7 +721,10 @@ class WIFF:
 			c = WIFF_chunk(self._current_file, nextoff)
 
 		# Create chunk data
-		self._current_file.resize_add(4096)
+		if not firstsegment:
+			# Have to create a file with some contents in order to mmap it, so use this first page if first segment
+			self._current_file.resize_add(4096)
+
 		w = WIFFWAVE(self, self._current_file, c)
 		cs.append(w)
 		w.initchunk(None, segmentid)
@@ -746,7 +753,7 @@ class WIFF:
 		"""
 		Add an annotation to the current chunk.
 		"""
-		return self._current_annogations.add_annotation(**kargs)
+		return self._current_annotations.add_annotation(**kargs)
 
 	# -----------------------------------------------
 	# -----------------------------------------------
@@ -842,7 +849,7 @@ class _filewrap:
 			# Have to call open this way as it otherwise means the function defined above
 			f = __builtins__['open'](fname, 'wb')
 			# Have to write something to memory map it
-			f.write(b'0')
+			f.write(b'\0' *4096)
 			f.close()
 
 		self.fname = fname
@@ -904,7 +911,7 @@ class WIFF_chunk:
 	def offset(self): return self._s.offset
 
 	@property
-	def data_offset(self): return self.offset + 24
+	def data_offset(self): return self.offset + self.len
 
 	@property
 	def magic(self): return self._s.magic.val
@@ -917,8 +924,11 @@ class WIFF_chunk:
 	def size(self, v): self._s.size.val = v
 
 	@property
+	def len(self): return 24
+
+	@property
 	def attributes(self):
-		return struct.unpack("<BBBBBBBB", self._s.attributes.val)
+		return struct.unpack("<BBBBBBBB", struct.pack("<Q", self._s.attributes.val))
 	@attributes.setter
 	def attributes(self, v):
 		self._s.attributes.val = struct.unpack("<Q", struct.pack("<BBBBBBBB", *v))[0]
@@ -964,6 +974,8 @@ class WIFF_chunk:
 		Resize the chunk @chk to the new size indicated @new_size in bytes.
 		If not the last chunk in the file, then everything after it must be moved
 		"""
+		raise NotImplementedError
+		print(['resize', new_size])
 
 		# Work only in pages
 		if new_size % 4096 != 0:
@@ -990,6 +1002,7 @@ class WIFF_chunk:
 		pg_total = fsize // 4096
 
 		# Increase file size
+		print(['resize', delta])
 		chk._s.fw.resize_add(delta)
 
 		# If not the last chunk, then need to move pages
@@ -1115,7 +1128,7 @@ class WIFFINFO:
 
 		for i in range(len(files)):
 			f = files[i]
-			self.add_file(f['name'], f['fidx_start'], f['fidx_end'])
+			self.add_file(f['name'], f['fidx_start'], f['fidx_end'], f['aidx_start'], f['aidx_end'])
 
 	@property
 	def magic(self): return self.chunk.magic
@@ -1223,7 +1236,7 @@ class WIFFINFO:
 	@property
 	def files(self): return self._s.files
 
-	def add_file(self, fname, fidx_start, fidx_end):
+	def add_file(self, fname, fidx_start, fidx_end, aidx_start, aidx_end):
 		"""
 		Adds a new file to the list
 		"""
@@ -1259,6 +1272,8 @@ class WIFFINFO:
 		self._s.files[fnum].index_name_end.val = off + len(fname)
 		self._s.files[fnum].fidx_start.val = fidx_start
 		self._s.files[fnum].fidx_end.val = fidx_end
+		self._s.files[fnum].aidx_start.val = aidx_start
+		self._s.files[fnum].aidx_end.val = aidx_end
 		self._s.files[fnum].name.val = fname
 
 
@@ -1381,6 +1396,7 @@ class WIFFANNO:
 		# Get the annotation number (same as the annotations[] index)
 		ann_no = self.num_annotations
 
+		# Initialize these
 		if self.num_annotations == 0:
 			# First annotation
 			self.aidx_start = 0
@@ -1388,26 +1404,8 @@ class WIFFANNO:
 			self.fidx_first = fidx.start
 			self.fidx_last = fidx.stop
 
-			# Start first annotation at the next page boundary
-			# But offset in the jumplist is relative to the start of the jump list
-			_off = self._s.index_annotations.val
-			# Subtract off the header
-			_off += self._s.offset - self.chunk.offset
-
-			# Set first jump
-			self._s.annotations_jumplist[ann_no] = (4096-_off, 4096-_off+ln)
-
-		else:
-			# TODO Expand if needed
-
-			# Get previous offsets
-			prev = self._s.annotations_jumplist[ann_no-1]
-
-			# Set new jump
-			x = self._s.annotations_jumplist[ann_no] = (prev[1], prev[1] + ln)
-
-		# Update counter
-		self.num_annotations = ann_no + 1
+		# Add to jump table
+		self._s.annotations.add(ln, start=4096-self._s.annotations_jumplist.offset-self.chunk.len, page=4096)
 
 		# Copy in annotation data
 		a = self._s.annotations[ann_no]
@@ -1435,6 +1433,23 @@ class WIFFANNO:
 		# Update frame index range
 		self.fidx_first = min(self.fidx_first, fidx.start)
 		self.fidx_last = max(self.fidx_last, fidx.stop)
+
+
+		# If this is the first frame, then need to set the start
+		if ann_no == 0:
+			self.aidx_start = ann_no
+
+		# Add number of annotations to the end
+		self.aidx_end = ann_no + 1
+
+		# Update counter
+		self.num_annotations = ann_no + 1
+		self.wiff._chunks['INFO'].num_annotations += 1
+
+		for f in self.wiff.files:
+			if f.name.val == self.fw.fname:
+				f.aidx_end.val = self.aidx_end
+
 
 	def resize_add_page(self, val):
 		"""
