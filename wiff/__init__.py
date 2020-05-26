@@ -459,23 +459,33 @@ class WIFF:
 			o.close()
 
 	# Get all matching chunks
-	def _GetINFO(self): return self._GetChunks('WIFFINFO')
-	def _GetWAVE(self): return self._GetChunks('WIFFWAVE')
-	def _GetANNO(self): return self._GetChunks('WIFFANNO')
-	def _GetChunks(self, magic=None):
+	def _GetINFO(self, fname=None): return self._GetChunks('WIFFINFO', fname=fname)
+	def _GetWAVE(self, fname=None): return self._GetChunks('WIFFWAVE', fname=fname)
+	def _GetANNO(self, fname=None): return self._GetChunks('WIFFANNO', fname=fname)
+	def _GetChunks(self, magic=None, fname=None):
 		"""
-		Find all matching chunks for the magic (WIFFINFO, WIFFWAVE, WIFFANNO) or
-		use a _GetINFO, _GetWAVE, _GetANNO.
+		Find all matching chunks for the magic (WIFFINFO, WIFFWAVE, WIFFANNO) or use a _GetINFO, _GetWAVE, _GetANNO.
+		Can supply filename @fname to limit chunk search.
 		"""
+		# Coerce to a list
+		if isinstance(fname, str):
+			fname = [fname]
+		else:
+			# Assume it's ok otherwise
+			pass
+
 		if magic == 'WIFFINFO':
+			# Doesn't matter what fname is for the info, it's always in the main file
 			yield self._chunks['INFO']
 		else:
 			# Iterate over all files
-			for fname in self._chunks.keys():
-				if fname == 'INFO': continue
+			for key in self._chunks.keys():
+				if key == 'INFO': continue
+				if fname is not None:
+					if key not in fname: continue
 
 				# Iterate over the chunks in each file
-				chunks = self._chunks[fname]
+				chunks = self._chunks[key]
 				for chunk in chunks:
 					# Compare magic
 					if magic is None:
@@ -483,11 +493,12 @@ class WIFF:
 					elif chunk.magic == magic:
 						yield chunk
 
-	def get_annotations(self, typ=None, fidx=None):
+	def get_annotations(self, typ=None, fidx=None, fname=None):
 		"""
 		Get all annotations that match all supplied arguments.
 		@typ -- Type of the annotation must match exactly
 		@fidx -- Frame index must be between the start and stop indices of the annotation
+		@fname -- File name (string or list of strings) to limit annotation search to
 
 		These options can take the appropriate type (string, int, etc).
 		Alternatively, the value can be a function whose value is evaluated as a boolean.
@@ -518,7 +529,7 @@ class WIFF:
 			filts.append(lambda x:True)
 
 		# Iterate over all annotation chunks
-		chunks = self._GetANNO()
+		chunks = self._GetANNO(fname=fname)
 		for annos in chunks:
 			# Iterate over all annotations
 			for ann in annos.annotations:
@@ -1296,7 +1307,6 @@ class WIFFINFO:
 		self._s.files[fnum].aidx_start.val = aidx_start
 		self._s.files[fnum].aidx_end.val = aidx_end
 		self._s.files[fnum].name.val = fname
-
 
 class WIFFANNO:
 	"""
