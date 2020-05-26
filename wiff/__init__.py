@@ -1248,6 +1248,15 @@ class WIFFINFO:
 	@property
 	def files(self): return self._s.files
 
+	def get_file_by_name(self, fname):
+		for i in range(len(self._s.files)):
+			f = self._s.files[i]
+			if f.name.val == fname:
+				return f
+
+		raise ValueError("File not found with name '%s'" % fname)
+
+
 	def add_file(self, fname, fidx_start, fidx_end, aidx_start, aidx_end):
 		"""
 		Adds a new file to the list
@@ -1439,6 +1448,8 @@ class WIFFANNO:
 		else:
 			raise ValueError("Unrecognized annotation type '%s'" % typ)
 
+		# Get file struct to update its properties
+		f = self.wiff._chunks['INFO'].get_file_by_name(self.fw.fname)
 
 		# Update annotations header
 		self.aidx_end = self.aidx_start + ann_no
@@ -1458,9 +1469,10 @@ class WIFFANNO:
 		self.num_annotations = ann_no + 1
 		self.wiff._chunks['INFO'].num_annotations += 1
 
-		for f in self.wiff.files:
-			if f.name.val == self.fw.fname:
-				f.aidx_end.val = self.aidx_end
+		# Update file stats
+		f.aidx_end.val = self.aidx_end
+		f.fidx_start.val = self.fidx_first
+		f.fidx_end.val = self.fidx_last
 
 
 	def resize_add_page(self, val):
