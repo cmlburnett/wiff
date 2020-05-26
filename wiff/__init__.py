@@ -778,6 +778,8 @@ class WIFF:
 			'fs': self.fs,
 			'num_frames': self.num_frames,
 			'num_annotations': self.num_annotations,
+			'num_channels': self.num_channels,
+			'num_files': self.num_files,
 			'channels': [],
 			'files': [],
 			'segments': [],
@@ -799,6 +801,8 @@ class WIFF:
 				'name': f.name.val,
 				'fidx start': f.fidx_start.val,
 				'fidx end': f.fidx_end.val,
+				'aidx start': f.aidx_start.val,
+				'aidx end': f.aidx_end.val,
 			})
 
 		return ret
@@ -811,26 +815,30 @@ class WIFF:
 		d = self.dumps_dict()
 
 		ret = []
-		ret.append("%20s | %s" % ("File", d['file']))
-		ret.append("%20s | %s" % ("Description", d['description']))
-		ret.append("%20s | %s" % ("Start", d['start']))
-		ret.append("%20s | %s" % ("End", d['end']))
-		ret.append("%20s | %s" % ("fs", d['fs']))
-		ret.append("%20s | %s" % ("Number of Frames", d['num_frames']))
-		ret.append("%20s | %s" % ("Number of Annotations", d['num_annotations']))
+		ret.append("%30s | %s" % ("File", d['file']))
+		ret.append("%30s | %s" % ("Description", d['description']))
+		ret.append("%30s | %s" % ("Start", d['start']))
+		ret.append("%30s | %s" % ("End", d['end']))
+		ret.append("%30s | %s" % ("fs", d['fs']))
+		ret.append("%30s | %s" % ("Number of Frames", d['num_frames']))
+		ret.append("%30s | %s" % ("Number of Annotations", d['num_annotations']))
+		ret.append("%30s | %s" % ("Number of Channels", d['num_channels']))
+		ret.append("%30s | %s" % ("Number of Files", d['num_files']))
 		ret.append("")
 		for c in d['channels']:
-			ret.append("%20s %d" % ('Channel', c['idx']))
-			ret.append("%25s | %s" % ('Name', c['name']))
-			ret.append("%25s | %s" % ('Bit', c['bit']))
-			ret.append("%25s | %s" % ('Unit', c['unit']))
-			ret.append("%25s | %s" % ('Comment', c['comment']))
+			ret.append("%30s %d" % ('Channel', c['idx']))
+			ret.append("%35s | %s" % ('Name', c['name']))
+			ret.append("%35s | %s" % ('Bit', c['bit']))
+			ret.append("%35s | %s" % ('Unit', c['unit']))
+			ret.append("%35s | %s" % ('Comment', c['comment']))
 		ret.append("")
 		for f in d['files']:
-			ret.append("%20s %d" % ('File', f['idx']))
-			ret.append("%25s | %s" % ('Name', f['name']))
-			ret.append("%25s | %s" % ('Frame Index Start', f['fidx start']))
-			ret.append("%25s | %s" % ('Frame Index End', f['fidx end']))
+			ret.append("%30s %d" % ('File', f['idx']))
+			ret.append("%35s | %s" % ('Name', f['name']))
+			ret.append("%35s | %s" % ('Frame Index Start', f['fidx start']))
+			ret.append("%35s | %s" % ('Frame Index End', f['fidx end']))
+			ret.append("%35s | %s" % ('Annotation Index Start', f['aidx start']))
+			ret.append("%35s | %s" % ('Annotation Index End', f['aidx end']))
 
 		return "\n".join(ret)
 
