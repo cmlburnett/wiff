@@ -1,12 +1,12 @@
 """
 WIFF -- Waveform Interchange File Format
 
-This is a combination of files that are similar to the generic EA IFF 85 chunk format.
-However, IFF is limited to 32-bit chunk lengths which is inadequate.
+This is a combination of files that are similar to the generic EA IFF 85 chunk format (inspired AIFF, RIFF, PNG, JFIF, etc)
+However, IFF is limited to 32-bit chunk lengths which is inadequate and this expands to 64-bit.
 
-The same chunk format is used for a couple types of files:
-	- Informative that contains information about the entire dataset
-	- Waveform files to permit slicing up large datasets into multiple files
+The same chunk format is used for a couple types of chunks:
+	- Informative that contains information about the entire dataset ("recording")
+	- Waveform files to permit slicing up ("segments") large datasets into multiple files
 	- Annotation files to add markers at various frames in the files
 
 Terminology
@@ -40,7 +40,7 @@ WIFF chunk format
 	Zero padding bytes to make entire chunk to be a multiple of 8
 
 Chunks
-	It is encouraged to put chunk boundaries on 4096 byte blocks, or larger.
+	It is encouraged to put chunk boundaries on 4096 byte blocks
 	This permits modifying a file in place without having to rewrite the entire file for small edits.
 	If streaming to the end of a chunk then this matters less.
 
@@ -48,9 +48,12 @@ Chunks
 	How chunks are organized is up to the caller.
 	It is possible to use one file for information, waveform, and annotations.
 
-	All byte indices used within are relative to the chunk data itself.
+	All byte indices used within are relative and are 16-bit values.
+	Should an index overflow, then a new segment will be needed.
 	Thus, if a chunk in its entirety is shifting within a file then no updates are needed
 	 to a chunk to keep it consistent.
+
+	Strings are not null-terminated.
 
 
 	WIFFINFO -- Information
@@ -76,7 +79,8 @@ Chunks
 		[X:Y-1] -- Start of channel definitions as non-padded sequences of the definition below
 		[Y:Z] -- Start of file definitions as non-padded sequences of the definition below
 
-		Thus, the indices of the strings' start and end can be calculated and the total size of the data block determined without having to parse actual content data (total size is in [8:9]). Strings are NOT null terminated.
+		Indices of strings are sequential.
+		For example, the end time string index is the ending offset of the start time string.
 
 
 	Channel definition:
@@ -138,6 +142,9 @@ Chunks
 		[40:47] -- Last frame index
 		[48:X] -- Frames
 
+	The 256 channel limitation is due to the bitfield here.
+	Supporting 256 channels only requires 32 bytes of space, but supporting 65k channels would require 8kb just for a bitfield.
+	As this seemed excessive for my current needs, I opted against it and stuck with 8-bit (256 channels).
 
 
 
