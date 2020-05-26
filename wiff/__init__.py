@@ -286,65 +286,6 @@ class WIFF:
 		self._current_segment = None
 		self._current_annotations = None
 
-	@property
-	def fs(self): return self._chunks['INFO'].fs
-	@fs.setter
-	def fs(self, v): self._chunks['INFO'].fs = v
-
-	@property
-	def start(self): return self._chunks['INFO'].start
-	@start.setter
-	def start(self, v): self._chunks['INFO'].start = v
-
-	@property
-	def end(self): return self._chunks['INFO'].end
-	@end.setter
-	def end(self, v): self._chunks['INFO'].end = v
-
-	@property
-	def description(self): return self._chunks['INFO'].description
-	@description.setter
-	def description(self, v): self._chunks['INFO'].description = v
-
-	@property
-	def num_channels(self): return self._chunks['INFO'].num_channels
-	@num_channels.setter
-	def num_channels(self, v): self._chunks['INFO'].num_channels = v
-
-	@property
-	def num_files(self): return self._chunks['INFO'].num_files
-	@num_files.setter
-	def num_files(self, v): self._chunks['INFO'].num_files = v
-
-	@property
-	def num_frames(self): return self._chunks['INFO'].num_frames
-	@num_frames.setter
-	def num_frames(self, v): self._chunks['INFO'].num_frames = v
-
-	@property
-	def num_annotations(self): return self._chunks['INFO'].num_annotations
-	@num_annotations.setter
-	def num_annotations(self, v): self._chunks['INFO'].num_annotations = v
-
-	@property
-	def channels(self): return self._chunks['INFO'].channels
-
-	@property
-	def files(self): return self._chunks['INFO'].files
-
-	@property
-	def current_segment(self): return self._current_segment
-
-	def __enter__(self):
-		pass
-	def __exit__(self, *exc):
-		self.close()
-		return False
-
-	def close(self):
-		for fname,o in self._files.items():
-			o.close()
-
 	@classmethod
 	def open(cls, fname):
 		"""
@@ -455,6 +396,65 @@ class WIFF:
 		w._chunks['INFO'] = wi
 
 		return w
+
+	@property
+	def fs(self): return self._chunks['INFO'].fs
+	@fs.setter
+	def fs(self, v): self._chunks['INFO'].fs = v
+
+	@property
+	def start(self): return self._chunks['INFO'].start
+	@start.setter
+	def start(self, v): self._chunks['INFO'].start = v
+
+	@property
+	def end(self): return self._chunks['INFO'].end
+	@end.setter
+	def end(self, v): self._chunks['INFO'].end = v
+
+	@property
+	def description(self): return self._chunks['INFO'].description
+	@description.setter
+	def description(self, v): self._chunks['INFO'].description = v
+
+	@property
+	def num_channels(self): return self._chunks['INFO'].num_channels
+	@num_channels.setter
+	def num_channels(self, v): self._chunks['INFO'].num_channels = v
+
+	@property
+	def num_files(self): return self._chunks['INFO'].num_files
+	@num_files.setter
+	def num_files(self, v): self._chunks['INFO'].num_files = v
+
+	@property
+	def num_frames(self): return self._chunks['INFO'].num_frames
+	@num_frames.setter
+	def num_frames(self, v): self._chunks['INFO'].num_frames = v
+
+	@property
+	def num_annotations(self): return self._chunks['INFO'].num_annotations
+	@num_annotations.setter
+	def num_annotations(self, v): self._chunks['INFO'].num_annotations = v
+
+	@property
+	def channels(self): return self._chunks['INFO'].channels
+
+	@property
+	def files(self): return self._chunks['INFO'].files
+
+	@property
+	def current_segment(self): return self._current_segment
+
+	def __enter__(self):
+		pass
+	def __exit__(self, *exc):
+		self.close()
+		return False
+
+	def close(self):
+		for fname,o in self._files.items():
+			o.close()
 
 	# Get all matching chunks
 	def _GetINFO(self): return self._GetChunks('WIFFINFO')
