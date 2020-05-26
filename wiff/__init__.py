@@ -677,15 +677,20 @@ class WIFF:
 		# Get last chunk
 		fname = self._current_file.fname
 		cs = self._chunks[fname]
-		lastchunk = cs[-1].chunk
+		if len(cs):
+			lastchunk = cs[-1].chunk
 
-		# End of the last chunk (offset + size) is where the next block begins
-		nextoff = lastchunk.offset + lastchunk.size
+			# End of the last chunk (offset + size) is where the next block begins
+			nextoff = lastchunk.offset + lastchunk.size
 
 
-		# Create new chunk
-		self._current_file.resize_add(4096)
-		c = WIFF_chunk(self._current_file, nextoff)
+			# Create new chunk
+			self._current_file.resize_add(4096)
+			c = WIFF_chunk(self._current_file, nextoff)
+		else:
+			# No chunks, this starts at the beginning of the file
+			c = WIFF_chunk(self._current_file, 0)
+
 		w = WIFFANNO(self, self._current_file, c)
 		cs.append(w)
 		w.initchunk(None)
@@ -981,8 +986,6 @@ class WIFF_chunk:
 		Resize the chunk @chk to the new size indicated @new_size in bytes.
 		If not the last chunk in the file, then everything after it must be moved
 		"""
-		raise NotImplementedError
-		print(['resize', new_size])
 
 		# Work only in pages
 		if new_size % 4096 != 0:
@@ -1009,7 +1012,6 @@ class WIFF_chunk:
 		pg_total = fsize // 4096
 
 		# Increase file size
-		print(['resize', delta])
 		chk._s.fw.resize_add(delta)
 
 		# If not the last chunk, then need to move pages
