@@ -286,30 +286,6 @@ class WIFF:
 		self._current_segment = None
 		self._current_annotations = None
 
-	@classmethod
-	def open(cls, fname):
-		"""
-		Open an existing WIFF file.
-		"""
-		return cls._open_existing(fname)
-
-	@classmethod
-	def new(cls, fname, props, force):
-		"""
-		@props -- dictionary including:
-			'start'			datetime objects
-			'end'			datetime objects
-			'description'	string describing the recording
-			'fs'			sampling frequency (int)
-			'channels'		list of channels
-				'name'			name of the channel
-				'bit'			bits (int) of each measurement
-				'unit'			physical units of the measurement (str)
-				'comment'		Arbitrary comment on the channel
-			'files'			list of files, probably empty (except for INFO file) for a new recording
-		"""
-		return cls._open_new(fname, props, force)
-
 	@property
 	def fs(self): return self._chunks['INFO'].fs
 	@fs.setter
@@ -370,7 +346,60 @@ class WIFF:
 			o.close()
 
 	@classmethod
-	def _open_new(cls, fname, props, force):
+	def open(cls, fname):
+		"""
+		Open an existing WIFF file.
+		"""
+		w = cls()
+
+		# Blank all files
+		w._fname = fname
+		w._files.clear()
+		w._chunks.clear()
+		w._chunks[fname] = []
+
+		# Wrap file
+		f = w._files[fname] = _filewrap(fname)
+
+		chunks = WIFF_chunk.FindChunks(f.f)
+		for chunk in chunks:
+			c = WIFF_chunk(f, chunk['offset header'])
+			if chunk['magic'] == 'WIFFINFO':
+				wi = WIFFINFO(w, f, c)
+				w._chunks[fname].append(wi)
+
+				if 'INFO' in w._chunks:
+					raise NotImplementedError("Multiple WAVEINFO chunks is not supported")
+				w._chunks['INFO'] = wi
+			elif chunk['magic'] == 'WIFFWAVE':
+				ww = WIFFWAVE(w, f, c)
+				ww.setup()
+				w._chunks[fname].append(ww)
+			elif chunk['magic'] == 'WIFFANNO':
+				wa = WIFFANNO(self, f, c)
+				w._chunks[fname].append(wa)
+
+			else:
+				raise TypeError('Uknown chunk magic: %s' % chunk['magic'])
+
+		return w
+
+	@classmethod
+	def new(cls, fname, props, force):
+		"""
+		@props -- dictionary including:
+			'start'			datetime objects
+			'end'			datetime objects
+			'description'	string describing the recording
+			'fs'			sampling frequency (int)
+			'channels'		list of channels
+				'name'			name of the channel
+				'bit'			bits (int) of each measurement
+				'unit'			physical units of the measurement (str)
+				'comment'		Arbitrary comment on the channel
+			'files'			list of files, probably empty (except for INFO file) for a new recording
+		"""
+
 		if os.path.exists(fname):
 			if not force:
 				raise Exception("File '%s' exists, cannot open; pass force=True to override" % fname)
@@ -424,42 +453,6 @@ class WIFF:
 
 		w._chunks[fname] = [wi]
 		w._chunks['INFO'] = wi
-
-		return w
-
-	@classmethod
-	def _open_existing(cls, fname):
-		w = cls()
-
-		# Blank all files
-		w._fname = fname
-		w._files.clear()
-		w._chunks.clear()
-		w._chunks[fname] = []
-
-		# Wrap file
-		f = w._files[fname] = _filewrap(fname)
-
-		chunks = WIFF_chunk.FindChunks(f.f)
-		for chunk in chunks:
-			c = WIFF_chunk(f, chunk['offset header'])
-			if chunk['magic'] == 'WIFFINFO':
-				wi = WIFFINFO(w, f, c)
-				w._chunks[fname].append(wi)
-
-				if 'INFO' in w._chunks:
-					raise NotImplementedError("Multiple WAVEINFO chunks is not supported")
-				w._chunks['INFO'] = wi
-			elif chunk['magic'] == 'WIFFWAVE':
-				ww = WIFFWAVE(w, f, c)
-				ww.setup()
-				w._chunks[fname].append(ww)
-			elif chunk['magic'] == 'WIFFANNO':
-				wa = WIFFANNO(self, f, c)
-				w._chunks[fname].append(wa)
-
-			else:
-				raise TypeError('Uknown chunk magic: %s' % chunk['magic'])
 
 		return w
 
