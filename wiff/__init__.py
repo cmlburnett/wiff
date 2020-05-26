@@ -348,24 +348,26 @@ class WIFF:
 			# Have to open it to find all the files linked with it to completely delete it
 			files = None
 			try:
-				w = cls(fname)
-				print('w')
-				for f in w.files:
-					print(f)
+				w = cls.open(fname)
+				files = [f.name.val for f in w.files]
+				w.close()
 			except Exception as e:
 				pass
+
 			if files is None:
 				# Likely this isn't a WIFF file so delete just it
 				os.unlink(fname)
 			else:
-				pass
+				# Unlink all files, if they are present
+				for f in files:
+					if os.path.exists(f):
+						os.unlink(f)
 
 		# Make a shell object
 		w = cls()
 
 		# Blank all files
 		w._fname = fname
-
 		w._chunks[fname] = []
 
 		# Wrap file
