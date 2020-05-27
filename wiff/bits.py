@@ -1,3 +1,24 @@
+"""
+This file contains bitfield class that helps modify an arbitrary list of bytes as bits.
+
+To set the 13th bit (zero-based indexing...) do:
+
+	b = bitfield.from_bytes(...)
+	b[12] = 1
+	... = b.to_bytes()
+
+You can set bits by providing the indices to set().
+You can clear bits by providing the indices to clear().
+
+You can get the set indices by calling set_indices().
+You can get the cleared indices by calling clear_indices().
+
+Stack supportin of pop() and push() are available too.
+
+
+This is used in WIFF to modify the channels bit field on the WIFFWAVE to indicate which channels are used.
+"""
+
 import functools
 import operator
 import struct
@@ -109,3 +130,4 @@ class bitfield:
 		functools.reduce(operator.iconcat, b, ret)
 
 		return ret
+
