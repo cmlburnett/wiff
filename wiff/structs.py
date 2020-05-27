@@ -1,6 +1,17 @@
 from bstruct import *
 
 class chunk_struct(metaclass=bstructmeta):
+	"""
+	A chunk is a 24 byte header with arbitrary binary data after it.
+	This layout is inspired from the EA IFF 85 except this is 64-bit size where as IFF is 32-bit.
+	This also adds an 8 byte array of attributes that can change how the binary data blob is interpreted.
+
+	@magic is an 8 character ASCII string of WIFFINFO, WIFFWAVE, or WIFFANNO.
+	@size is a 64-bit size of the chunk
+	@attributes is an 8 byte array of data that changes with each chunk type
+
+	The main structs are info_struct, annos_struct, and wave_struct.
+	"""
 	dat = {
 		'magic': member_str(0, 8),
 		'size': member_8(8),
@@ -72,6 +83,7 @@ class info_struct(metaclass=bstructmeta):
 	"""
 	Main struct for WIFFINFO chunk.
 	Uses a jump table and list to manage the channels and files.
+	This is the first chunk in the primary file.
 	"""
 	dat = {
 		'index_start': member_ref(0),
@@ -119,6 +131,15 @@ class info_struct(metaclass=bstructmeta):
 		return ret
 
 class wave_struct(metaclass=bstructmeta):
+	"""
+	WIFFWAVE struct that defines a segment of frames of binary data.
+	Each segment defines which channels it includes, which is necessary to know how to interpret the data.
+
+	@channels is a 32 byte binary blob of 256 bits where each bit of 1 indicates the channel is included and 0 indicates the channel is NOT included
+	@fidx_start is the first frame (absolute) index contained in this segment
+	@fidx_end is the last frame (absolute) index contained in this segment
+	@records is a binary blob (after the channel data is understood, the record size is manually set at run time to appropriate parse individual records from this blob
+	"""
 	dat = {
 		'channels': member_binary(0),
 		'fidx_start': member_8(32),
@@ -132,6 +153,16 @@ class wave_struct(metaclass=bstructmeta):
 		return 48 + record_size+num_records
 
 class ann_C_struct(metaclass=bstructmeta):
+	"""
+	A "C" annotation which is just a UTF8 comment.
+
+	@type is "C" to indicate a comment annotation
+	@fidx_start is the starting frame (absolute) index this annotation is marking up
+	@fidx_end is the ending frame (absolute) index this annotation is marking up (if equal to start, this annotation applies to a single frame)
+	@index_comment_start is the relative index of the start of the comment string
+	@index_comment_end is the relative index of the end of the comment string
+	@comment is the UTF-8 encoded comment string
+	"""
 	dat = {
 		'type': member_1(0),
 		'fidx_start': member_8(1),
@@ -155,6 +186,14 @@ class ann_C_struct(metaclass=bstructmeta):
 		return ret
 
 class ann_M_struct(metaclass=bstructmeta):
+	"""
+	A "M" annotation is a simple marker that consists of a 32-bit value.
+
+	@type is "M" to indicate a marker annotation
+	@fidx_start is the starting frame (absolute) index this annotation is marking up
+	@fidx_end is the ending frame (absolute) index this annotation is marking up (if equal to start, this annotation applies to a single frame)
+	@marker is a 32-bit value marker that is defined by the application layer (can be a number, or a 4-character ASCII string stored as a 32-bit number)
+	"""
 	dat = {
 		'type': member_1(0),
 		'fidx_start': member_8(1),
@@ -166,6 +205,16 @@ class ann_M_struct(metaclass=bstructmeta):
 		return 21
 
 class ann_D_struct(metaclass=bstructmeta):
+	"""
+	A "D" annotation is a marker that consists of a 32-bit value and a 64-bit value.
+	The value could be an interpreted value from the data contained witin the indicated frames (eg, a QRS interval in miliseconds stroed as a 64-bit float).
+
+	@type is "D" to indicate a marker annotation
+	@fidx_start is the starting frame (absolute) index this annotation is marking up
+	@fidx_end is the ending frame (absolute) index this annotation is marking up (if equal to start, this annotation applies to a single frame)
+	@marker is a 32-bit value marker that is defined by the application layer (can be a number, or a 4-character ASCII string stored as a 32-bit number)
+	@value is a 64-bit value defined by the application layer (can be a 64-bit integer, two 32-bit integers, a 64-bit float, or......)
+	"""
 	dat = {
 		'type': member_1(0),
 		'fidx_start': member_8(1),
@@ -178,6 +227,10 @@ class ann_D_struct(metaclass=bstructmeta):
 		return 29
 
 class ann_struct(metaclass=bstructmeta):
+	"""
+	An annotation consists of a type, frame interval, and data.
+	Annotations are polymorphic on the @type member and are defined as above.
+	"""
 	dat = {
 		'type': member_str(0, 1),
 		'fidx_start': member_8(1),
@@ -207,6 +260,20 @@ class ann_struct(metaclass=bstructmeta):
 
 
 class annos_struct(metaclass=bstructmeta):
+	"""
+	WIFFANNO struct that defines a list of annotations marking up the WIFFWAVE frames of data.
+	Each annotation applies to a single frame, or an interval of frames, and includes some sort of data.
+	This struct defines the minimu and maximum frame (absolute) index and annotation (absolute) index included in this segment.
+
+	@aidx_start is the starting annotation (absolute) index in this chunk
+	@aidx_end is the last annotation (absolute) index in this chunk
+	@fidx_first is the first referenced frame (absolute) index of all annotations in this chunk
+	@fidx_last is the last referenced frame (absolute) index of all annotations in this chunk
+	@num_annotations is the number of annotations in this chunk
+	@index_annotations is the (relative) index of the annotations list
+	@annotations_jumplist is the jumptable for the annotations list
+	@annotations is the list of annotations (polymorphic ann_struct)
+	"""
 	dat = {
 		'aidx_start': member_8(0),
 		'aidx_end': member_8(8),
