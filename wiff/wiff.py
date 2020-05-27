@@ -1,3 +1,14 @@
+"""
+WIFF is the primary class that the application interacts with.
+It contains the big functions like open() and new() as well as add_annotation() and add_frames().
+All operations manipulating a WIFF recording should ultimately be done through a function in this object.
+
+The actual mmap()'ing files is done through the _filewrap class and is the single point of data read/write
+ for ALL files in this recording.
+
+Wiff_chunk handles the 24-byte header on each chunk.
+WIFFINFO, WIFFWAVE, and WIFFANNO are the front ends for the major chunk types.
+"""
 
 import datetime
 import bstruct

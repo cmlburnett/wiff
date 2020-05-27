@@ -1,3 +1,7 @@
+"""
+Utility file.
+Nothing here should reference anything else in this library.
+"""
 
 import mmap
 import os
@@ -26,14 +30,14 @@ class _filewrap:
 	def __init__(self, fname):
 		""" Wrap the file with name @fname """
 		if not os.path.exists(fname):
-			# Have to call open this way as it otherwise means the function defined above
+			# Have to call open this way (I don't want it confused with open() defined at the library level)
 			f = __builtins__['open'](fname, 'wb')
 			# Have to write something to memory map it
 			f.write(b'\0' *4096)
 			f.close()
 
 		self.fname = fname
-		# Have to call open this way as it otherwise means the function defined above
+		# Have to call open this way
 		self.f = __builtins__['open'](fname, 'r+b')
 		self.mmap = mmap.mmap(self.f.fileno(), 0)
 		self.size = os.path.getsize(fname)
@@ -61,7 +65,7 @@ class _filewrap:
 		Supply an integer or slice and binary data.
 		If the data is beyond the file size, NeedResizeException is thrown
 		"""
-		# Resize map and file upward as needed
+		# If requesting to set space that isn't available, throw an exception for the caller
 		if isinstance(k, slice):
 			if k.stop > self.size:
 				raise NeedResizeException
