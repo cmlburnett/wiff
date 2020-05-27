@@ -271,7 +271,7 @@ class annos_struct(metaclass=bstructmeta):
 	@fidx_last is the last referenced frame (absolute) index of all annotations in this chunk
 	@num_annotations is the number of annotations in this chunk
 	@index_annotations is the (relative) index of the annotations list
-	@annotations_jumplist is the jumptable for the annotations list
+	@annotations_jumptable is the jumptable for the annotations list
 	@annotations is the list of annotations (polymorphic ann_struct)
 	"""
 	dat = {
@@ -281,8 +281,8 @@ class annos_struct(metaclass=bstructmeta):
 		'fidx_last': member_8(24),
 		'num_annotations': member_4(32),
 		'index_annotations': member_ref(36),
-		'annotations_jumplist': member_jumptable('index_annotations', 'num_annotations', 'annotations'),
-		'annotations': member_list(ann_struct, 'annotations_jumplist'),
+		'annotations_jumptable': member_jumptable('index_annotations', 'num_annotations', 'annotations'),
+		'annotations': member_list(ann_struct, 'annotations_jumptable'),
 	}
 	@staticmethod
 	def lenplan(annos):

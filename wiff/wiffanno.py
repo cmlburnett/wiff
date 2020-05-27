@@ -132,7 +132,7 @@ class WIFFANNO:
 			self.fidx_last = fidx.stop
 
 		# Add to jump table
-		self._s.annotations.add(ln, start=4096-self._s.annotations_jumplist.offset-self.chunk.len, page=4096)
+		self._s.annotations.add(ln, start=4096-self._s.annotations_jumptable.offset-self.chunk.len, page=4096)
 
 		# Copy in annotation data
 		a = self._s.annotations[ann_no]
