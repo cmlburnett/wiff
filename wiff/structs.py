@@ -1,3 +1,19 @@
+"""
+This file contains the struct definitions.
+This is the de facto definition of the file formats: what is defined here is WHAT the files should be.
+Other documentation is secondary to what is written here (hopefully they agree).
+
+These structs are defined using a custom binary struct (bstruct) library I wrote to handle this.
+The goal is to avoid application caching of data and so the bstruct layer uses mmap()'ed files
+ to read/write file data.
+Thus, modifying members of these structs gets directly reflected in the binary data in the file.
+The key challenge with this is handling offsets correctly which necessitating writing that logic
+ in a separate library (one-off errors would be catastrophic).
+
+Polymorphism is used on the annotation types using the @type member.
+Calling condition_on('type') will return the correct struct type depending on the @type value.
+"""
+
 from bstruct import *
 
 class chunk_struct(metaclass=bstructmeta):
