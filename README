@@ -1,0 +1,28 @@
+WIFF -- Waveform Interchange File Format
+
+This is a custom binary file format intended to be used for waveform data.
+A waveform consists of a number of channels (up to 256 currently) and of arbitrary bit depth for each channel.
+This binary data is accompanied by annotations to mark up the waveform data with specific information.
+For example, a 12 lead EKG is a common waveform of 12 channels with markers that could includ P waves, QRS complexes, and T waves.
+
+At this time, this library is very alpha and guarantee it has bugs and glitches.
+The unit tests in both this library and bstruct provide me with some confidence that it probably works as intended.
+
+### Test ###
+Uses the unittest library:
+
+	python setup.py test
+
+### Install ###
+This library relies on the bstruct library I wrote that mmap's binary data into Python memory space.
+(The builtin library struct is utlized heavily to serialize and deserialize this binary data.)
+No other dependencies are needed.
+
+Locally
+
+	python setup.py install
+
+Or globally
+
+	sudo python3 setup.py install
+
