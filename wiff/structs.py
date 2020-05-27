@@ -274,7 +274,6 @@ class ann_struct(metaclass=bstructmeta):
 		else:
 			raise ValueError("Unrecognized annotation type '%s'" % typ)
 
-
 class annos_struct(metaclass=bstructmeta):
 	"""
 	WIFFANNO struct that defines a list of annotations marking up the WIFFWAVE frames of data.
