@@ -290,8 +290,8 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(w.channels[1].bit.val, 12)
 				self.assertEqual(w.channels[1].comment.val, "lead test X")
 
-				self.assertEqual(w.files[0].fidx_start.val, 0)
-				self.assertEqual(w.files[0].fidx_end.val, 0)
+				self.assertEqual(w.files[0].fidx_start.val, 10)
+				self.assertEqual(w.files[0].fidx_end.val, 40)
 				self.assertEqual(w.files[0].aidx_start.val, 0)
 				self.assertEqual(w.files[0].aidx_end.val, 3)
 				self.assertEqual(w.files[0].name.val, fname)
@@ -347,7 +347,7 @@ class SimpleTests(unittest.TestCase):
 				expected_dat += struct.pack('<HH', 12,70)
 				# File 0
 				expected_dat += struct.pack('<HHHH', 0,0,0,0)
-				expected_dat += struct.pack('<BHHQQQQ', 0, 37, 37+len(fname), 0,0, 0,3)
+				expected_dat += struct.pack('<BHHQQQQ', 0, 37, 37+len(fname), 10,40, 0,3)
 				expected_dat += fname.encode('ascii')
 
 				with open(fname, 'rb') as g:
