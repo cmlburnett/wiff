@@ -456,7 +456,10 @@ class WIFF:
 
 	def close(self):
 		for fname,o in self._files.items():
-			o.close()
+			try:
+				o.close()
+			except Exception as e:
+				print(e)
 
 	# Get all matching chunks
 	def _GetINFO(self, fname=None): return self._GetChunks('WIFFINFO', fname=fname)
