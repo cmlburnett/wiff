@@ -301,7 +301,7 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(a.fidx_start.val, 10)
 				self.assertEqual(a.fidx_end.val, 20)
 				a = a.condition_on('type')
-				self.assertIsInstance(a, wiff.ann_M_struct)
+				self.assertIsInstance(a, wiff.structs.ann_M_struct)
 				self.assertEqual(a.marker.val, struct.unpack('<I', 'WXYZ'.encode('ascii'))[0])
 
 				a = w._current_annotations.annotations[1]
@@ -309,7 +309,7 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(a.fidx_start.val, 30)
 				self.assertEqual(a.fidx_end.val, 40)
 				a = a.condition_on('type')
-				self.assertIsInstance(a, wiff.ann_D_struct)
+				self.assertIsInstance(a, wiff.structs.ann_D_struct)
 				self.assertEqual(a.marker.val, struct.unpack('<I', 'ABCD'.encode('ascii'))[0])
 				self.assertEqual(a.value.val, 456789012345)
 
@@ -318,7 +318,7 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(a.fidx_start.val, 15)
 				self.assertEqual(a.fidx_end.val, 25)
 				a = a.condition_on('type')
-				self.assertIsInstance(a, wiff.ann_C_struct)
+				self.assertIsInstance(a, wiff.structs.ann_C_struct)
 				self.assertEqual(a.index_comment_start.val, 21)
 				self.assertEqual(a.index_comment_end.val, 21 + len("silly comment"))
 				self.assertEqual(a.comment.val, "silly comment")

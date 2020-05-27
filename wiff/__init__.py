@@ -213,13 +213,7 @@ Keeping track of offsets within the file is tedious, and this layering makes han
 
 WIFF_VERSION = 1
 
-from .bits import bitfield
-from .compress import WIFFCompress
-from .structs import *
-
-
 from .wiff import WIFF
-from .util import _filewrap, DATE_FMT, twotuplecheck
 
 
 def open(fname):
