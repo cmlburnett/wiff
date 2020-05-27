@@ -768,12 +768,16 @@ class WIFF:
 		"""
 		Add a frame of samples to the current segment
 		"""
+		if self._current_segment is None:
+			raise ValueError("Cannot add frames, must create or set an segment chunk")
 		return self._current_segment.add_frame(*samps)
 
 	def add_annotation(self, **kargs):
 		"""
 		Add an annotation to the current chunk.
 		"""
+		if self._current_annotations is None:
+			raise ValueError("Cannot add annotations, must create or set an annotations chunk")
 		return self._current_annotations.add_annotation(**kargs)
 
 	# -----------------------------------------------
