@@ -11,7 +11,7 @@ setup(
 	author_email = "cmlburnett@gmail.com",
 	url = "",
 	packages = ['wiff'],
-	package_data = {'wiff': ['wiff/__init__.py']},
+	package_data = {'wiff': ['wiff/__init__.py', 'wiff/bits.py', 'wiff/compress.py', 'wiff/structs.py', 'wiff/wiffwave.py']},
 	classifiers = [
 		'Programming Language :: Python :: 3.7'
 	],
