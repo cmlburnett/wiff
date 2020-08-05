@@ -7,7 +7,7 @@ The actual mmap()'ing files is done through the _filewrap class and is the singl
  for ALL files in this recording.
 
 Wiff_chunk handles the 24-byte header on each chunk.
-WIFFINFO, WIFFWAVE, and WIFFANNO are the front ends for the major chunk types.
+WIFFINFO, WIFFWAVE, WIFFMETA, and WIFFANNO are the front ends for the major chunk types.
 """
 
 import datetime
@@ -21,6 +21,7 @@ from .wiffchunk import WIFF_chunk
 from .wiffanno import WIFFANNO
 from .wiffinfo import WIFFINFO
 from .wiffwave import WIFFWAVE
+from .wiffmeta import WIFFMETA
 
 class WIFF:
 	"""

@@ -131,3 +131,4 @@ class WIFF_chunk:
 
 		# Record the chunk size as bigger
 		chk.size = new_size
+

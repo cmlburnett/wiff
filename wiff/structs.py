@@ -30,8 +30,8 @@ class chunk_struct(metaclass=bstructmeta):
 	"""
 	dat = {
 		'magic': member_str(0, 8),
-		'size': member_8(8),
-		'attributes': member_8(16),
+		'size': member_8I(8),
+		'attributes': member_8I(16),
 	}
 	@staticmethod
 	def lenplan(size):
@@ -43,9 +43,9 @@ class channel_struct(metaclass=bstructmeta):
 	Sub-struct to handle individual channel definitions.
 	"""
 	dat = {
-		'index': member_1(0),
+		'index': member_1I(0),
 		'index_name': member_ref(1),
-		'bit': member_1(3),
+		'bit': member_1I(3),
 		'index_unit': member_ref(4),
 		'index_comment_start': member_ref(6),
 		'index_comment_end': member_ref(8),
@@ -72,13 +72,13 @@ class file_struct(metaclass=bstructmeta):
 	Sub-struct to handle individual file definitions.
 	"""
 	dat = {
-		'index': member_1(0),
+		'index': member_1I(0),
 		'index_name_start': member_ref(1),
 		'index_name_end': member_ref(3),
-		'fidx_start': member_8(5),
-		'fidx_end': member_8(13),
-		'aidx_start': member_8(21),
-		'aidx_end': member_8(29),
+		'fidx_start': member_8I(5),
+		'fidx_end': member_8I(13),
+		'aidx_start': member_8I(21),
+		'aidx_end': member_8I(29),
 		'name': member_str('index_name_start', 'index_name_end'),
 	}
 	@staticmethod
@@ -108,11 +108,11 @@ class info_struct(metaclass=bstructmeta):
 		'index_channels': member_ref(6),
 		'index_file_start': member_ref(8),
 		'index_file_end': member_ref(10),
-		'fs': member_4(12),
-		'num_channels': member_2(16),
-		'num_files': member_2(18),
-		'num_frames': member_8(20),
-		'num_annotations': member_8(28),
+		'fs': member_4I(12),
+		'num_channels': member_2I(16),
+		'num_files': member_2I(18),
+		'num_frames': member_8I(20),
+		'num_annotations': member_8I(28),
 		'start': member_str('index_start', 'index_end'),
 		'end': member_str('index_end', 'index_description'),
 		'description': member_str('index_description', 'index_channels'),
@@ -158,8 +158,8 @@ class wave_struct(metaclass=bstructmeta):
 	"""
 	dat = {
 		'channels': member_binary(0),
-		'fidx_start': member_8(32),
-		'fidx_end': member_8(40),
+		'fidx_start': member_8I(32),
+		'fidx_end': member_8I(40),
 		# Size of the record set to 1 to have something set, it should be adjusted
 		# based on runtime needs
 		'records': member_binary_record(48, 1),
@@ -180,9 +180,9 @@ class ann_C_struct(metaclass=bstructmeta):
 	@comment is the UTF-8 encoded comment string
 	"""
 	dat = {
-		'type': member_1(0),
-		'fidx_start': member_8(1),
-		'fidx_end': member_8(9),
+		'type': member_1I(0),
+		'fidx_start': member_8I(1),
+		'fidx_end': member_8I(9),
 		'index_comment_start': member_ref(17),
 		'index_comment_end': member_ref(19),
 		'comment': member_str('index_comment_start', 'index_comment_end'),
@@ -211,10 +211,10 @@ class ann_M_struct(metaclass=bstructmeta):
 	@marker is a 32-bit value marker that is defined by the application layer (can be a number, or a 4-character ASCII string stored as a 32-bit number)
 	"""
 	dat = {
-		'type': member_1(0),
-		'fidx_start': member_8(1),
-		'fidx_end': member_8(9),
-		'marker': member_4(17),
+		'type': member_1I(0),
+		'fidx_start': member_8I(1),
+		'fidx_end': member_8I(9),
+		'marker': member_4I(17),
 	}
 	@staticmethod
 	def lenplan():
@@ -232,11 +232,11 @@ class ann_D_struct(metaclass=bstructmeta):
 	@value is a 64-bit value defined by the application layer (can be a 64-bit integer, two 32-bit integers, a 64-bit float, or......)
 	"""
 	dat = {
-		'type': member_1(0),
-		'fidx_start': member_8(1),
-		'fidx_end': member_8(9),
-		'marker': member_4(17),
-		'value': member_8(21),
+		'type': member_1I(0),
+		'fidx_start': member_8I(1),
+		'fidx_end': member_8I(9),
+		'marker': member_4I(17),
+		'value': member_8I(21),
 	}
 	@staticmethod
 	def lenplan():
@@ -249,8 +249,8 @@ class ann_struct(metaclass=bstructmeta):
 	"""
 	dat = {
 		'type': member_str(0, 1),
-		'fidx_start': member_8(1),
-		'fidx_end': member_8(9),
+		'fidx_start': member_8I(1),
+		'fidx_end': member_8I(9),
 		'data': member_binary(17),
 	}
 	conditional = {
@@ -290,11 +290,11 @@ class annos_struct(metaclass=bstructmeta):
 	@annotations is the list of annotations (polymorphic ann_struct)
 	"""
 	dat = {
-		'aidx_start': member_8(0),
-		'aidx_end': member_8(8),
-		'fidx_first': member_8(16),
-		'fidx_last': member_8(24),
-		'num_annotations': member_4(32),
+		'aidx_start': member_8I(0),
+		'aidx_end': member_8I(8),
+		'fidx_first': member_8I(16),
+		'fidx_last': member_8I(24),
+		'num_annotations': member_4I(32),
 		'index_annotations': member_ref(36),
 		'annotations_jumptable': member_jumptable('index_annotations', 'num_annotations', 'annotations'),
 		'annotations': member_list(ann_struct, 'annotations_jumptable'),
@@ -322,4 +322,206 @@ class annos_struct(metaclass=bstructmeta):
 		ret += d *4096
 
 		return ret
+
+class meta_data_1I_struct(metaclass=bstructmeta):
+	dat = {
+		'num_data': member_2I(0),
+		'data': member_1I_array(2),
+	}
+	@staticmethod
+	def lenplan(ln):
+		return 2 + 1*ln
+
+class meta_data_2I_struct(metaclass=bstructmeta):
+	dat = {
+		'num_data': member_2I(0),
+		'data': member_2I_array(2),
+	}
+	@staticmethod
+	def lenplan(ln):
+		return 2 + 2*ln
+
+class meta_data_4I_struct(metaclass=bstructmeta):
+	dat = {
+		'num_data': member_2I(0),
+		'data': member_4I_array(2),
+	}
+	@staticmethod
+	def lenplan(ln):
+		return 2 + 4*ln
+
+class meta_data_8I_struct(metaclass=bstructmeta):
+	dat = {
+		'num_data': member_2I(0),
+		'data': member_8I_array(2),
+	}
+	@staticmethod
+	def lenplan(ln):
+		return 2 + 8*ln
+
+class meta_data_4F_struct(metaclass=bstructmeta):
+	dat = {
+		'num_data': member_2I(0),
+		'data': member_4F_array(2),
+	}
+	@staticmethod
+	def lenplan(ln):
+		return 2 + 4*ln
+
+class meta_data_8F_struct(metaclass=bstructmeta):
+	dat = {
+		'num_data': member_2I(0),
+		'data': member_8F_array(2),
+	}
+	@staticmethod
+	def lenplan(ln):
+		return 2 + 8*ln
+
+class str_struct(metaclass=bstructmeta):
+	dat = {
+		'index_start': member_ref(0),
+		'index_end': member_ref(2),
+		'str': member_str('index_start','index_end'),
+	}
+	@staticmethod
+	def lenplan(s):
+		return 4 + len(s.encode('utf8'))
+
+class meta_data_str_struct(metaclass=bstructmeta):
+	"""
+
+	@subtype is intended to be a MIME type to indicate how string data should be interpreted (eg, string, XML, JSON)
+	"""
+	dat = {
+		'type': member_1I(0),
+		'subtype': member_1I(1),
+		'num_strings': member_2I(2),
+		'strings_jumptable': member_jumptable(4, 'num_strings', 'strings' ),
+		'strings': member_list('strings_jumptable', str_struct),
+	}
+	@staticmethod
+	def lenplan(strs):
+		ret = 2
+
+		ret += 4 * len(strs)
+		ret += sum([len(_) for _ in strs])
+		return ret
+
+class meta_data_struct(metaclass=bstructmeta):
+	dat = {
+		'type': member_1I(0),
+		'data': member_binary(1),
+	}
+	conditional = {
+		'type': {
+			0: meta_data_str_struct,
+			1: meta_data_1I_struct,
+			2: meta_data_2I_struct,
+			3: meta_data_4I_struct,
+			4: meta_data_8I_struct,
+			5: meta_data_4F_struct,
+			6: meta_data_8F_struct,
+		},
+	}
+	@staticmethod
+	def lenplan(typ, **kargs):
+		if typ == 0: return meta_data_struct.lenplan(**kargs)
+		elif typ == 1: return meta_data_1I_struct.lenplan(**kargs)
+		elif typ == 2: return meta_data_2I_struct.lenplan(**kargs)
+		elif typ == 3: return meta_data_4I_struct.lenplan(**kargs)
+		elif typ == 4: return meta_data_8I_struct.lenplan(**kargs)
+		elif typ == 5: return meta_data_4F_struct.lenplan(**kargs)
+		elif typ == 6: return meta_data_8F_struct.lenplan(**kargs)
+		else:
+			raise ValueError("Unrecognized type %d" % typ)
+
+class meta_struct(metaclass=bstructmeta):
+	"""
+	Metadata value.
+	Levels:
+		0 -- Recording level information (index has no meaning here)
+		1 -- Channel
+		2 -- File
+		3 -- Frame
+		4 -- Annotation
+		5 -- Meta (meta about meta, how meta is that?)
+	For some of these, the @level_index indicates which specific entry the value applies to
+
+	Types (all are assuming to be a list of the same type:
+		0 -- String
+		1 -- 8-bit int
+		2 -- 16-bit int
+		3 -- 32-bit int
+		4 -- 64-bit int
+		5 -- 32-bit float
+		6 -- 64-bit float
+
+	The keys are always UTF-8 strings.
+	The format of the keys are up to the application and can be flat keys, or nested keys using a delimiter (eg, period, colon, slash)
+	 or any other structure as desired.
+	Overall, the keys must be unique and no duplicates permitted.
+
+	@index_key_start is the starting (relative) offset of the start of the key string
+	@index_key_end is the ending (relative) offset of the end of the key string
+	@index_data_start is the starting (relative) offset of the binary data for this value
+	@index_data_end is the ending (relative) offset of the binary data for this value
+	@level is an integer describing which aspect of this recording this metadata value applies to
+	@level_index is the index that may be relavent to the @level
+	@key is the application defined key that defines what this metadata value is all about
+	@data is a sub struct that is polymorphic
+	"""
+	dat = {
+		'index_key_start': member_ref(0),
+		'index_key_end': member_ref(2),
+		'index_data_start': member_ref(4),
+		'index_data_end': member_ref(6),
+		'level': member_1I(7),
+		'level_index': member_8I(8),
+		'key': member_str('index_key_start', 'index_key_end'),
+		'data': member_substruct('index_data_start', meta_data_struct),
+	}
+
+class metas_struct(metaclass=bstructmeta):
+	"""
+	WIFFMETA struct that defines metadata about the entire recording.
+	"""
+	dat = {
+		'num_metas': member_4I(0),
+		'index_metas': member_ref(4),
+		'metas_jumptable': member_jumptable('index_metas', 'num_metas', 'metas'),
+		'metas': member_list(meta_struct, 'metas_jumptable'),
+	}
+
+	class LEVEL(enum.Enum):
+		"""Enum listing the known levels."""
+		RECORDING = 0
+		CHANNEL = 1
+		FILE = 2
+		FRAME = 3
+		ANNOTATION = 4
+		META = 5
+
+	class TYPE(enum.IntEnum):
+		"""Enum listing the known meta value types."""
+		STRING = 0
+		INT8 = 1
+		INT16 = 2
+		INT32 = 3
+		INT64 = 4
+		FLOAT32 = 5
+		FLOAT64 = 6
+
+	@staticmethod
+	def level_to_string(val):
+		return meta_struct.LEVEL(val).name
+	@staticmethod
+	def level_from_string(val):
+		return meta_struct.LEVEL[val].value
+
+	@staticmethod
+	def type_to_string(val):
+		return meta_struct.TYPE(val).name
+	@staticmethod
+	def type_from_string(val):
+		return meta_struct.TYPE[val].value
 

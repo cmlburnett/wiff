@@ -153,6 +153,7 @@ Chunks
 			0			No compression
 			Z			zlib
 			B			bzip2
+		[1:7] -- Attribute data reserved
 
 	Annotations
 		[0:7] -- First annotation index
@@ -197,6 +198,26 @@ Chunks
 		[9:15] -- Frame index end
 		[16:19] -- 4 character marker
 		[20:27] -- 8 byte data value associated with the marker
+
+
+
+
+	WIFFMETA -- Metadata
+		[0] -- First byte is an ASCII character indicating compression used
+			0			No compression
+			Z			zlib
+			B			bzip2
+		[1:7] -- Attribute data reserved
+
+	Metadata
+		[0:3] -- Number of values
+		[4:5] -- Index of start of values
+		[6:X-1] -- Values jumptable
+		[X:Y] -- Values
+
+	Metadata is essentially a key=value pair of data.
+	The keys are always UTF-8 strings but the values can be anything.
+
 
 All data is read/written using mmap without intermediate/buffered data in this library.
 Doing this avoids issues of consistency as all modifications are written directly to the files
