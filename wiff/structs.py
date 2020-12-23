@@ -16,6 +16,8 @@ Calling condition_on('type') will return the correct struct type depending on th
 
 from bstruct import *
 
+import enum
+
 class chunk_struct(metaclass=bstructmeta):
 	"""
 	A chunk is a 24 byte header with arbitrary binary data after it.
@@ -113,6 +115,7 @@ class info_struct(metaclass=bstructmeta):
 		'num_files': member_2I(18),
 		'num_frames': member_8I(20),
 		'num_annotations': member_8I(28),
+		'num_metas': member_8I(36),
 		'start': member_str('index_start', 'index_end'),
 		'end': member_str('index_end', 'index_description'),
 		'description': member_str('index_description', 'index_channels'),
@@ -124,7 +127,7 @@ class info_struct(metaclass=bstructmeta):
 	@staticmethod
 	def lenplan(start, end, description, chans, files):
 		# Should match num_frames offset + 8
-		ret = 36
+		ret = 44
 
 		for v in [start, end, description]:
 			if isinstance(v, str):
@@ -377,7 +380,7 @@ class meta_data_8F_struct(metaclass=bstructmeta):
 	def lenplan(ln):
 		return 2 + 8*ln
 
-class str_struct(metaclass=bstructmeta):
+class meta_str_struct(metaclass=bstructmeta):
 	dat = {
 		'index_start': member_ref(0),
 		'index_end': member_ref(2),
@@ -397,7 +400,7 @@ class meta_data_str_struct(metaclass=bstructmeta):
 		'subtype': member_1I(1),
 		'num_strings': member_2I(2),
 		'strings_jumptable': member_jumptable(4, 'num_strings', 'strings' ),
-		'strings': member_list('strings_jumptable', str_struct),
+		'strings': member_list('strings_jumptable', meta_str_struct),
 	}
 	@staticmethod
 	def lenplan(strs):
@@ -424,14 +427,14 @@ class meta_data_struct(metaclass=bstructmeta):
 		},
 	}
 	@staticmethod
-	def lenplan(typ, **kargs):
-		if typ == 0: return meta_data_struct.lenplan(**kargs)
-		elif typ == 1: return meta_data_1I_struct.lenplan(**kargs)
-		elif typ == 2: return meta_data_2I_struct.lenplan(**kargs)
-		elif typ == 3: return meta_data_4I_struct.lenplan(**kargs)
-		elif typ == 4: return meta_data_8I_struct.lenplan(**kargs)
-		elif typ == 5: return meta_data_4F_struct.lenplan(**kargs)
-		elif typ == 6: return meta_data_8F_struct.lenplan(**kargs)
+	def lenplan(typ, data):
+		if typ == 0: return meta_data_str_struct.lenplan(data)
+		elif typ == 1: return meta_data_1I_struct.lenplan(len(data))
+		elif typ == 2: return meta_data_2I_struct.lenplan(len(data))
+		elif typ == 3: return meta_data_4I_struct.lenplan(len(data))
+		elif typ == 4: return meta_data_8I_struct.lenplan(len(data))
+		elif typ == 5: return meta_data_4F_struct.lenplan(len(data))
+		elif typ == 6: return meta_data_8F_struct.lenplan(len(data))
 		else:
 			raise ValueError("Unrecognized type %d" % typ)
 
@@ -480,6 +483,14 @@ class meta_struct(metaclass=bstructmeta):
 		'key': member_str('index_key_start', 'index_key_end'),
 		'data': member_substruct('index_data_start', meta_data_struct),
 	}
+	@staticmethod
+	def lenplan(key, data_type, data):
+		"""
+		For planning, @data must always be a list or tuple.
+		Passing a singular value is not accepted at this level.
+		"""
+
+		return 16 + len(key) + meta_data_struct.lenplan(data_type, data)
 
 class metas_struct(metaclass=bstructmeta):
 	"""
@@ -511,17 +522,17 @@ class metas_struct(metaclass=bstructmeta):
 		FLOAT32 = 5
 		FLOAT64 = 6
 
-	@staticmethod
-	def level_to_string(val):
-		return meta_struct.LEVEL(val).name
-	@staticmethod
-	def level_from_string(val):
-		return meta_struct.LEVEL[val].value
+	@classmethod
+	def level_to_string(cls, val):
+		return cls.LEVEL(val).name
+	@classmethod
+	def level_from_string(cls, val):
+		return cls.LEVEL[val.upper()].value
 
-	@staticmethod
-	def type_to_string(val):
-		return meta_struct.TYPE(val).name
-	@staticmethod
-	def type_from_string(val):
-		return meta_struct.TYPE[val].value
+	@classmethod
+	def type_to_string(cls, val):
+		return cls.TYPE(val).name
+	@classmethod
+	def type_from_string(cls, val):
+		return cls.TYPE[val].value
 

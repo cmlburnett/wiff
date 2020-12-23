@@ -34,7 +34,7 @@ class WIFFINFO:
 		# Version 1
 		self.chunk.attributes = (1,0,0,0, 0,0,0,0)
 
-	def initheader(self, start, end, desc, fs, num_frames, num_annotations, channels, files):
+	def initheader(self, start, end, desc, fs, num_frames, num_annotations, num_metas, channels, files):
 		"""
 		Initializes a new header
 		This requires explicit initialization of all the byte indices.
@@ -50,6 +50,7 @@ class WIFFINFO:
 		self.num_annotations = num_annotations
 		self.num_channels = len(channels)
 		self.num_files = len(files)
+		self.num_metas = num_metas
 
 		self.start = start.strftime(DATE_FMT)
 		self.end = end.strftime(DATE_FMT)
@@ -163,6 +164,11 @@ class WIFFINFO:
 	def num_annotations(self): return self._s.num_annotations.val
 	@num_annotations.setter
 	def num_annotations(self, val): self._s.num_annotations.val = val
+
+	@property
+	def num_metas(self): return self._s.num_metas.val
+	@num_metas.setter
+	def num_metas(self, val): self._s.num_metas.val = val
 
 
 	@property

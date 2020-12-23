@@ -68,7 +68,7 @@ class SimpleTests(unittest.TestCase):
 				expected_dat = 'WIFFINFO'.encode('ascii')
 				expected_dat += struct.pack("<QQ", 4096, 1)
 				# WIFFINFO header
-				expected_dat += struct.pack("<HHHHHHIHHQQ", 36, 58, 80, 91, 147, 217, 12345, 2, 1, 0, 0)
+				expected_dat += struct.pack("<HHHHHHIHHQQQ", 44, 66, 88, 99, 155, 225, 12345, 2, 1, 0, 0, 0)
 				expected_dat += "20010203 040506.070809".encode('ascii')
 				expected_dat += "20101112 131415.161718".encode('ascii')
 				expected_dat += "hello world".encode('ascii')
@@ -144,6 +144,7 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(w.num_files, 1)
 				self.assertEqual(w.num_frames, 10)
 				self.assertEqual(w.num_annotations, 0)
+				self.assertEqual(w.num_metas, 0)
 
 				self.assertEqual(w._chunks['INFO'].chunk.offset, 0)
 				self.assertEqual(w._chunks['INFO'].chunk.magic, "WIFFINFO")
@@ -174,7 +175,7 @@ class SimpleTests(unittest.TestCase):
 				expected_dat = 'WIFFINFO'.encode('ascii')
 				expected_dat += struct.pack("<QQ", 4096, 1)
 				# WIFFINFO header
-				expected_dat += struct.pack("<HHHHHHIHHQQ", 36, 58, 80, 91, 147, 217, 12345, 2, 1, 10, 0)
+				expected_dat += struct.pack("<HHHHHHIHHQQQ", 44, 66, 88, 99, 155, 225, 12345, 2, 1, 10, 0, 0)
 				expected_dat += "20010203 040506.070809".encode('ascii')
 				expected_dat += "20101112 131415.161718".encode('ascii')
 				expected_dat += "hello world".encode('ascii')
@@ -254,6 +255,7 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(w.num_files, 1)
 				self.assertEqual(w.num_frames, 0)
 				self.assertEqual(w.num_annotations, 3)
+				self.assertEqual(w.num_metas, 0)
 
 				self.assertEqual(w._chunks['INFO'].chunk.offset, 0)
 				self.assertEqual(w._chunks['INFO'].chunk.magic, "WIFFINFO")
@@ -331,7 +333,7 @@ class SimpleTests(unittest.TestCase):
 				expected_dat = 'WIFFINFO'.encode('ascii')
 				expected_dat += struct.pack("<QQ", 4096, 1)
 				# WIFFINFO header
-				expected_dat += struct.pack("<HHHHHHIHHQQ", 36, 58, 80, 91, 147, 217, 12345, 2, 1, 0, 3)
+				expected_dat += struct.pack("<HHHHHHIHHQQQ", 44, 66, 88, 99, 155, 225, 12345, 2, 1, 0, 3, 0)
 				expected_dat += "20010203 040506.070809".encode('ascii')
 				expected_dat += "20101112 131415.161718".encode('ascii')
 				expected_dat += "hello world".encode('ascii')
@@ -438,6 +440,7 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(w.num_files, 2)
 				self.assertEqual(w.num_frames, 20)
 				self.assertEqual(w.num_annotations, 0)
+				self.assertEqual(w.num_metas, 0)
 
 				self.assertEqual(w._chunks['INFO'].chunk.offset, 0)
 				self.assertEqual(w._chunks['INFO'].chunk.magic, "WIFFINFO")
@@ -481,7 +484,7 @@ class SimpleTests(unittest.TestCase):
 				expected_dat = 'WIFFINFO'.encode('ascii')
 				expected_dat += struct.pack("<QQ", 4096, 1)
 				# WIFFINFO header
-				expected_dat += struct.pack("<HHHHHHIHHQQ", 36, 58, 80, 91, 147, 277, 12345, 2, 2, 20, 0)
+				expected_dat += struct.pack("<HHHHHHIHHQQQ", 44, 66, 88, 99, 155, 285, 12345, 2, 2, 20, 0, 0)
 				expected_dat += "20010203 040506.070809".encode('ascii')
 				expected_dat += "20101112 131415.161718".encode('ascii')
 				expected_dat += "hello world".encode('ascii')
@@ -539,4 +542,102 @@ class SimpleTests(unittest.TestCase):
 			finally:
 				os.unlink(fname1)
 				os.unlink(fname2)
+
+	def test_meta(self):
+		"""
+		Tests if meta values work correctly.
+		"""
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				s_date = "20010203 040506.070809"
+				e_date = "20101112 131415.161718"
+				props = {
+					'start': datetime.datetime.strptime(s_date, "%Y%m%d %H%M%S.%f"),
+					'end':   datetime.datetime.strptime(e_date, "%Y%m%d %H%M%S.%f"),
+					'description': "hello world",
+					'fs': 12345,
+					'channels': [
+						{'name': 'I', 'bit': 12, 'unit': 'uV', 'comment': 'lead test I'},
+						{'name': 'X', 'bit': 12, 'unit': 'mA', 'comment': 'lead test X'},
+					],
+					'files': [],
+				}
+				w = wiff.WIFF.new(fname, props, force=False)
+				self.assertEqual(w.start, s_date)
+				self.assertEqual(w.end, e_date)
+				self.assertEqual(w.description, "hello world")
+				self.assertEqual(w.fs, 12345)
+				self.assertEqual(w.num_channels, 2)
+				self.assertEqual(w.num_files, 1)
+				self.assertEqual(w.num_frames, 0)
+				self.assertEqual(w.num_annotations, 0)
+				self.assertEqual(w.num_metas, 0)
+
+				self.assertEqual(w._chunks['INFO'].chunk.offset, 0)
+				self.assertEqual(w._chunks['INFO'].chunk.magic, "WIFFINFO")
+				self.assertEqual(w._chunks['INFO'].chunk.size, 4096)
+
+				self.assertEqual(w._chunks['INFO'].offset, 24)
+
+				self.assertEqual(w.channels[0].name.val, "I")
+				self.assertEqual(w.channels[0].unit.val, "uV")
+				self.assertEqual(w.channels[0].bit.val, 12)
+				self.assertEqual(w.channels[0].comment.val, "lead test I")
+
+				self.assertEqual(w.channels[1].name.val, "X")
+				self.assertEqual(w.channels[1].unit.val, "mA")
+				self.assertEqual(w.channels[1].bit.val, 12)
+				self.assertEqual(w.channels[1].comment.val, "lead test X")
+
+				self.assertEqual(w.files[0].fidx_start.val, 0)
+				self.assertEqual(w.files[0].fidx_end.val, 0)
+				self.assertEqual(w.files[0].aidx_start.val, 0)
+				self.assertEqual(w.files[0].aidx_end.val, 0)
+				self.assertEqual(w.files[0].name.val, fname)
+
+				w.set_file(fname)
+				w.new_metas()
+				w.add_meta('channel', 1, "source.brand", "Tektronix")
+
+				w.close()
+
+
+				# Compare binary data
+				expected_dat = 'WIFFINFO'.encode('ascii')
+				expected_dat += struct.pack("<QQ", 4096, 1)
+				# WIFFINFO header
+				#expected_dat += struct.pack("<HHHHHHIHHQQQ", 44, 66, 88, 99, 155, 225, 12345, 2, 1, 0, 0, 1)
+				expected_dat += struct.pack("<HHHHHHIHHQQQ", 44, 66, 88, 99, 155, 225, 12345, 2, 1, 0, 0, 0)
+				expected_dat += "20010203 040506.070809".encode('ascii')
+				expected_dat += "20101112 131415.161718".encode('ascii')
+				expected_dat += "hello world".encode('ascii')
+				# Channel jumptable
+				expected_dat += struct.pack('<HHHH', 8,32, 32,56)
+				# Channel 0
+				expected_dat += struct.pack('<BHBHHH', 0, 10, 12, 11, 13, 24)
+				expected_dat += "IuVlead test I".encode('ascii')
+				# Channel 1
+				expected_dat += struct.pack('<BHBHHH', 1, 10, 12, 11, 13, 24)
+				expected_dat += "XmAlead test X".encode('ascii')
+				# File jumptable
+				expected_dat += struct.pack('<HH', 12,70)
+				# File 0
+				expected_dat += struct.pack('<HHHH', 0,0,0,0)
+				expected_dat += struct.pack('<BHHQQQQ', 0, 37, 37+len(fname), 0,0, 0,0)
+				expected_dat += fname.encode('ascii')
+
+				# Make HEX (easier to view diff strings than binary)
+				expected_dat = expected_dat.hex()
+
+				with open(fname, 'rb') as g:
+					dat = g.read()
+				self.maxDiff = None
+				self.assertEqual(len(dat), 4096*3)
+				# Compare non-zero data
+				self.assertEqual(dat[0:len(expected_dat)].hex(), expected_dat)
+				self.assertEqual(dat[len(expected_dat):4096].hex(), '00'*(4096 - len(expected_dat)))
+
+			finally:
+				os.unlink(fname)
 

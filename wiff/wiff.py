@@ -44,6 +44,7 @@ class WIFF:
 		self._current_file = None
 		self._current_segment = None
 		self._current_annotations = None
+		self._current_metas = None
 
 	@classmethod
 	def open(cls, fname):
@@ -150,7 +151,7 @@ class WIFF:
 		c = WIFF_chunk(f, 0)
 		wi = WIFFINFO(w, f, c)
 		wi.initchunk()
-		wi.initheader(props['start'], props['end'], props['description'], props['fs'], 0,0, props['channels'], props['files'])
+		wi.initheader(props['start'], props['end'], props['description'], props['fs'], 0,0,0, props['channels'], props['files'])
 
 
 		w._chunks[fname] = [wi]
@@ -197,6 +198,11 @@ class WIFF:
 	def num_annotations(self): return self._chunks['INFO'].num_annotations
 	@num_annotations.setter
 	def num_annotations(self, v): self._chunks['INFO'].num_annotations = v
+
+	@property
+	def num_metas(self): return self._chunks['INFO'].num_metas
+	@num_metas.setter
+	def num_metas(self, v): self._chunks['INFO'].num_metas = v
 
 	@property
 	def channels(self): return self._chunks['INFO'].channels
@@ -466,6 +472,41 @@ class WIFF:
 
 		self._current_annotations = w
 
+	def new_metas(self):
+		"""
+		Start a new chunk for annotations.
+		"""
+
+		if self._current_file is None:
+			raise ValueError("Must set active file before creating a new metas chunk")
+
+		# Blank current metas pointer
+		self._current_metas = None
+
+		# Get last chunk
+		fname = self._current_file.fname
+		cs = self._chunks[fname]
+		if len(cs):
+			lastchunk = cs[-1].chunk
+
+			# End of the last chunk (offset + size) is where the next block begins
+			nextoff = lastchunk.offset + lastchunk.size
+
+
+			# Create new chunk
+			self._current_file.resize_add(4096)
+			c = WIFF_chunk(self._current_file, nextoff)
+		else:
+			# No chunks, this starts at the beginning of the file
+			c = WIFF_chunk(self._current_file, 0)
+
+		w = WIFFMETA(self, self._current_file, c)
+		cs.append(w)
+		w.initchunk(None)
+		w.initheader()
+
+		self._current_metas = w
+
 	def new_segment(self, chans, segmentid=None):
 		"""
 		Start a new segment in the current file
@@ -538,6 +579,14 @@ class WIFF:
 		if self._current_annotations is None:
 			raise ValueError("Cannot add annotations, must create or set an annotations chunk")
 		return self._current_annotations.add_annotation(**kargs)
+
+	def add_meta(self, level, level_index, key, data, data_type=None):
+		"""
+		Add a meta value to the current chunk.
+		"""
+		if self._current_metas is None:
+			raise ValueError("Cannot add meta, must create or set an meta chunk")
+		return self._current_metas.add_meta(level, level_index, key, data, data_type)
 
 	# -----------------------------------------------
 	# -----------------------------------------------
