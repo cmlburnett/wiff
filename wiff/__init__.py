@@ -25,216 +25,419 @@ Assumptions
 * One segment per WIFFWAVE chunk, one WIFFWAVE chunk per segment
 * Essentially no limit on duration of recording; entire recording can span any number of files
   effectively limited by the WIFFWAVE.ChunkID 32-bit unique ID and 64-bit size of chunks
-* Max 255 channels supported (8-bit index) but not unreasonable to support 16-bit indices
 * Annotations are supported that can mark a specific frame, or range of frames
-
-
-WIFF chunk format
-	Offset	Length	Contents
-	0		8		Chunk ID in ASCII characters
-	8		8		Size of chunk including the header
-	16		8		Attribute flags unique to each chunk that can be used as needed
-					Could be 32 one-bit flags, or 8 unsigned bytes, or whatever
-					Regardless, all chunks have these 8 attribute bytes.
-	24		N		Binary data
-	Zero padding bytes to make entire chunk to be a multiple of 8
-
-Chunks
-	It is encouraged to put chunk boundaries on 4096 byte blocks
-	This permits modifying a file in place without having to rewrite the entire file for small edits.
-	If streaming to the end of a chunk then this matters less.
-
-	Chunks can be sequential in the same file, or can be split into different files.
-	How chunks are organized is up to the caller.
-	It is possible to use one file for information, waveform, and annotations.
-
-	All byte indices used within are relative and are 16-bit values.
-	Should an index overflow, then a new segment will be needed.
-	Thus, if a chunk in its entirety is shifting within a file then no updates are needed
-	 to a chunk to keep it consistent.
-
-	Strings are not null-terminated.
-
-
-	WIFFINFO -- Information
-	Attributes
-		[0] -- Version of WIFF
-		[1-7] -- Reserved
-
-	Info chunk that is used to coordinate high-level information and the organization of the recording.
-
-	Data
-		[0:1] -- Byte index of start time string
-		[2:3] -- Byte index of end time string
-		[4:5] -- Byte index of description
-		[6:7] -- Byte index of channel definitions (X)
-		[8:9] -- Byte index of files start (Y)
-		[10:11] -- Byte index of files end (Z)
-		[12:15] -- 32-bit sampling rate in samples per second
-		[16:17] -- Number of channels (max 256 supported)
-		[18:19] -- Number of files
-		[20:27] -- Number of frames
-		[28:35] -- Number of annotations
-		[36:X-1] -- Start of string data for above
-		[X:Y-1] -- Start of channel definitions as non-padded sequences of the definition below
-		[Y:Z] -- Start of file definitions as non-padded sequences of the definition below
-
-		Indices of strings are sequential.
-		For example, the end time string index is the ending offset of the start time string.
-
-
-	Channel definition:
-		The channel definitions section starts with a jump table of byte indices for the specified number of channels. Each entry in the jump table is 4 bytes long with a 2-byte start and end index for each channel. Total size is thus 4*number of channels.
-
-		[0:1] -- Byte index of start of channel definition #0
-		[2:3] -- Byte index of end of channel definition #0
-		[4:5] -- Byte index of start of channel definition #1
-		[6:7] -- Byte index of end of channel definition #1
-		[8:9] -- Byte index of start of channel definition #2
-		...
-
-		Each channel then consists of:
-		[0] -- Index of channel
-		[1:2] -- Byte index of name of channel string
-		[3] -- Size of samples in bits (actual storage space are upper-bit padded full bytes)
-		[4:5] -- Byte index of physical units string
-		[6:7] -- Byte index of comments string start
-		[8:9] -- Byte index of comments string end (X)
-		[10:X] -- Strings
-
-		Channel definitions are in sequance right after each other, and so [X+1] marks the start of the next channel definition (if not the last channel).
-
-	File definitions:
-		[0:1] -- Byte index of start of file #0
-		[2:3] -- Byte inoex of end of file #0
-		[4:5] -- Byte index of start of file #1
-		[6:7] -- Byte inoex of end of file #1
-		[8:9] -- Byte index of start of file #2
-		...
-
-		Each file then consists of:
-		[0] -- Index of file
-		[1:2] -- Byte index of file name string start
-		[3:4] -- Byte index of file name string end (X)
-		[5:12] -- Start frame index
-		[13:20] -- End frame index
-		[21:28] -- Start annotation index
-		[29:36] -- End annotation index
-		[36:X] -- File name string
-
-
-	WIFFWAVE -- Waveform data
-	Attributes
-		[0] -- First byte is an ASCII character indicating compression used
-			0			No compression
-			Z			zlib
-			B			bzip2
-		[1] -- Reserved
-		[2] -- Reserved
-		[3] -- Reserved
-		[4:7] -- 32 bit segment ID references in WIFFINFO to order the chunks
-				 Chunk ID's need not be in numerical order, only unique within the same WIFF data set.
-				 Putting segment ID in attributes avoids having to decompress data first.
-
-	Data
-		[0:31] -- Bitfield identifying which channels are present from 0 to 255
-		[32:39] -- First frame index
-		[40:47] -- Last frame index
-		[48:X] -- Frames
-
-	The 256 channel limitation is due to the bitfield here.
-	Supporting 256 channels only requires 32 bytes of space, but supporting 65k channels would require 8kb just for a bitfield.
-	As this seemed excessive for my current needs, I opted against it and stuck with 8-bit (256 channels).
-
-
-
-	WIFFANNO -- Annotations
-		[0] -- First byte is an ASCII character indicating compression used
-			0			No compression
-			Z			zlib
-			B			bzip2
-		[1:7] -- Attribute data reserved
-
-	Annotations
-		[0:7] -- First annotation index
-		[8:15] -- Last annotation index
-		[16:23] -- First frame index referenced
-		[24:31] -- Last frame index referenced
-		[32:35] -- Number of annotations
-		[36:X-1] -- Annotation jump table
-		[X:Y] -- Annotation definitions
-
-	The first and last frame indices are meant to aid in speeding up searching for annotations matching annotations to a frame index. Without this, all annotation sections would have to be searched.
-
-	Annotations have different types with variable content each.
-	Markers are character codes that apply to a single frame or a range of frames.
-	Comments are freetext of variable length that add commentary to a single frame or a range of frames.
-
-	Markers are intended to identify repeating types in the data (eg, with ECG the beat type or the frame range of the QRS complex). Comments are meant to be typed in by a user to signify something unusual not easily achieved by the marker type and may be out-of-band information (eg, manual blood pressure reading when recording ECG, medication administration).
-
-	Annotation
-		[0] -- Annotation type
-		[1:8] -- Frame index start
-		[9:15] -- Frame index end
-		[16:X] -- Annotation data
-
-	Annotation: comment ('C')
-		[0]='C' -- Commentannotation
-		[1:8] -- Frame index start
-		[9:15] -- Frame index end
-		[16:18] -- Comment start byte index
-		[19:20] -- Comment end byte index
-		[21:X] -- Comment
-
-	Annotation: marker ('M')
-		[0]='M' -- Marker annotation
-		[1:8] -- Frame index start
-		[9:15] -- Frame index end
-		[16:19] -- 4 character marker
-
-	Annotation: marker with data ('D')
-		[0]='D' -- Data marker annotation
-		[1:8] -- Frame index start
-		[9:15] -- Frame index end
-		[16:19] -- 4 character marker
-		[20:27] -- 8 byte data value associated with the marker
-
-
-
-
-	WIFFMETA -- Metadata
-		[0] -- First byte is an ASCII character indicating compression used
-			0			No compression
-			Z			zlib
-			B			bzip2
-		[1:7] -- Attribute data reserved
-
-	Metadata
-		[0:3] -- Number of values
-		[4:5] -- Index of start of values
-		[6:X-1] -- Values jumptable
-		[X:Y] -- Values
-
-	Metadata is essentially a key=value pair of data.
-	The keys are always UTF-8 strings but the values can be anything.
-
-
-All data is read/written using mmap without intermediate/buffered data in this library.
-Doing this avoids issues of consistency as all modifications are written directly to the files
- and paging is handled by the OS.
-It is encouraged to cache values locally in the code calling this module to avoid repeatedly parsing the same binary data.
-This is intended because it is the caller that knows best what information is being re-used and where optimization
- can be done to minimize file operations.
-
-Parsing of the files is done with a custom struct module called bstruct.
-Each binary structure is defined as a separate class and the grunt work of packing and unpacking these binary
- structures is done in the background.
-Keeping track of offsets within the file is tedious, and this layering makes handling offsets a breeze.
 """
 
-WIFF_VERSION = 1
+WIFF_VERSION = 2
 
-from .wiff import WIFF
+import datetime
+import os
+
+from sqlitehelper import SH, DBTable, DBCol, DBColROWID
+
+def _now():
+	datetime.datetime.utcnow()
+
+class wiffdb(SH):
+	__schema__ = [
+		# Recording consists of multiple segments
+		DBTable('recording',
+			DBColROWID(),
+			DBCol('start', 'datetime'),
+			DBCol('end', 'datetime'),
+			DBCol('description', 'text'),
+			DBCol('sampling', 'int'),
+		),
+		# Each segment contains a number of frames of samples
+		DBTable('segment',
+			DBColROWID(),
+			DBCol('id_recording', 'int'),
+			DBCol('idx', 'int'),
+			DBCol('fidx_start', 'int'),
+			DBCol('fidx_end', 'int'),
+			DBCol('channelset_id', 'int'),
+			DBCol('id_blob', 'int'),
+		),
+		DBTable('blob',
+			DBColROWID(),
+			DBCol('compression', 'text'),
+			DBCol('data', 'blob'),
+		),
+
+		# Key/value pairs of metadata for a recording
+		DBTable('meta',
+			DBColROWID(),
+			DBCol('id_recording', 'int'),
+			DBCol('key', 'text'),
+			DBCol('type', 'text'),
+			DBCol('value', 'text'),
+		),
+		# Recording consists of any number of channels
+		DBTable('channel',
+			DBColROWID(),
+			DBCol('id_recording', 'int'),
+			DBCol('idx', 'int'),
+			DBCol('bits', 'int'),
+			DBCol('name', 'text'),
+			DBCol('unit', 'text'),
+			DBCol('comment', 'text'),
+		),
+		# Set of channels used in a segment, multiple rows with the same `set` value == segment.channelset
+		DBTable('channelset',
+			DBColROWID(),
+			DBCol('set', 'int'),
+			DBCol('id_channel', 'int'),
+		),
+
+		# Annotations apply to a range of frames to provide meaning
+		# to that range of frames
+		DBTable('annotation',
+			DBColROWID(),
+			DBCol('id_recording', 'int'),
+			DBCol('fidx_start', 'int'),
+			DBCol('fidx_end', 'int'),
+			DBCol('type', 'text'),
+			DBCol('comment', 'text'),
+			DBCol('marker', 'text'),
+			DBCol('data', 'int'),
+		),
+	]
+
+	def setpragma(self):
+		# Application ID is the 32-bit value for WIFF
+		a = 'WIFF'.encode('ascii')
+		b = (a[0] << 24) + (a[1] << 16) + (a[2] << 8) + (a[3])
+		self.begin()
+		self.execute("pragma application_id=%d" % b)
+		# Other pragmas?
+		self.commit()
+
+
+
+class _WIFF_obj:
+	def __init__(self, w):
+		self._w = w
+		self._db = w.db
+
+class _WIFF_obj_list(_WIFF_obj):
+	def keys(self):
+		res = self.sub_d.select('rowid')
+		rows = [_['rowid'] for _ in res]
+		return rows
+
+	def values(self):
+		_t = self._sub_type
+		return [_t(self._w, _) for _ in self.keys()]
+
+	def items(self):
+		return [(_, _t(self._w, _)) for _ in self.keys()]
+
+	def __iter__(self):
+		for k in self.keys():
+			yield k
+
+	def __len__(self):
+		return self._sub_d.num_rows()
+
+	def __getitem__(self, k):
+		return self._sub_type(self._w, k)
+
+class _WIFF_obj_item(_WIFF_obj):
+	def __init__(self, w, _id, meta_name):
+		super().__init__(w)
+
+		self._sub_d = getattr(w.db, meta_name)
+
+		self._id = _id
+
+		self.refresh()
+
+	def refresh(self):
+		self._data = self._sub_d.select_one('*', '`rowid`=?', [self._id])
+
+	@property
+	def id(self): return self._id
+
+class WIFF_recordings(_WIFF_obj_list):
+	def __init__(self, w):
+		self._sub_d = w.db.recording
+		self._sub_type = WIFF_recording
+
+		super().__init__(w)
+
+class WIFF_recording(_WIFF_obj_item):
+	def __init__(self, w, _id):
+		super().__init__(w, _id, 'recording')
+
+	@property
+	def start(self): return self._data['start']
+
+	@property
+	def end(self): return self._data['end']
+
+	@property
+	def description(self): return self._data['description']
+
+	@property
+	def sampling(self): return self._data['sampling']
+
+class WIFF_segments(_WIFF_obj_list):
+	def __init__(self, w):
+		self._sub_d = w.db.segment
+		self._sub_type = WIFF_segment
+
+		super().__init__(w)
+
+class WIFF_segment(_WIFF_obj_item):
+	def __init__(self, w, _id):
+		super().__init__(w, _id, 'segment')
+
+	@property
+	def id_recording(self): return self._data['id_recording']
+
+	@property
+	def recording(self): return self._w.recording[ self._data['id_recording'] ]
+
+	@property
+	def idx(self): return self._data['idx']
+
+	@property
+	def fidx_start(self): return self._data['fidx_start']
+
+	@property
+	def fidx_end(self): return self._data['fidx_end']
+
+	@property
+	def channelset_id(self): return self._data['channelset_id']
+
+	@property
+	def id_blob(self): return self._data['id_blob']
+
+	@property
+	def blob(self): return self._w.blob[ self._data['id_blob'] ]
+
+class WIFF_blobs(_WIFF_obj_list):
+	def __init__(self, w):
+		self._sub_d = w.db.blob
+		self._sub_type = WIFF_blob
+
+		super().__init__(w)
+
+class WIFF_blob(_WIFF_obj_item):
+	def __init__(self, w, _id):
+		super().__init__(w, _id, 'blob')
+
+	@property
+	def compression(self): return self._data['compression']
+
+	@property
+	def data(self): return self._data['data']
+
+class WIFF_metas(_WIFF_obj_list):
+	def __init__(self, w):
+		self._sub_d = w.db.meta
+		self._sub_type = WIFF_meta
+
+		super().__init__(w)
+
+class WIFF_meta(_WIFF_obj_item):
+	def __init__(self, w, _id):
+		super().__init__(w, _id, 'meta')
+
+	@property
+	def key(self): return self._data['key']
+
+	@property
+	def type(self): return self._data['type']
+
+	@property
+	def raw_value(self):
+		return self._data['value']
+
+	@property
+	def value(self):
+		t = self.type
+		v = self.raw_value
+
+		if t == 'int':
+			return int(v)
+		elif t == 'str':
+			return v
+		elif t == 'datetime':
+			return datetime.datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
+		elif t == 'blob':
+			# Interpret value as an id_blob
+			return WIFF_blob(self._w, int(v))
+		else:
+			raise TypeError("Unrecognized meta value type '%s' for value '%s'" % (t,v))
+
+class WIFF_channels(_WIFF_obj_list):
+	def __init__(self, w):
+		self._sub_d = w.db.channel
+		self._sub_type = WIFF_channel
+
+		super().__init__(w)
+
+class WIFF_channel(_WIFF_obj_item):
+	def __init__(self, w, _id):
+		super().__init__(w, _id, 'channel')
+
+	@property
+	def id_recording(self): return self._data['id_recording']
+
+	@property
+	def idx(self): return self._data['idx']
+
+	@property
+	def bits(self): return self._data['bits']
+
+	@property
+	def name(self): return self._data['name']
+
+	@property
+	def unit(self): return self._data['unit']
+
+	@property
+	def comment(self): return self._data['comment']
+
+class WIFF_channelsets(_WIFF_obj_list):
+	def __init__(self, w):
+		self._sub_d = w.db.channelset
+		self._sub_type = WIFF_channelset
+
+		super().__init__(w)
+
+class WIFF_channelset(_WIFF_obj_item):
+	def __init__(self, w, _id):
+		super().__init__(w, _id, 'channelset')
+
+	@property
+	def set(self): return self._data['set']
+
+	@property
+	def id_channel(self): return self._data['id_channel']
+
+	@property
+	def channel(self): return WIFF_channel(self._w, self._data['id_channel'])
+
+class WIFF_annotations(_WIFF_obj_list):
+	def __init__(self, w):
+		self._sub_d = w.db.annotation
+		self._sub_type = WIFF_annotation
+
+		super().__init__(w)
+
+class WIFF_annotation(_WIFF_obj_item):
+	def __init__(self, w, _id):
+		super().__init__(w, _id, 'annotation')
+
+	@property
+	def id_recording(self): return self._data['id_recording']
+
+	@property
+	def fidx_start(self): return self._data['fidx_start']
+
+	@property
+	def fidx_end(self): return self._data['fidx_end']
+
+	@property
+	def type(self): return self._data['type']
+
+	@property
+	def comment(self): return self._data['comment']
+
+	@property
+	def marker(self): return self._data['marker']
+
+	@property
+	def data(self): return self._data['data']
+
+
+class WIFF:
+	def __init__(self, fname):
+		self.db = wiffdb(fname)
+		self.db.open()
+
+		self.recording = WIFF_recordings(self)
+		self.segment = WIFF_segments(self)
+		self.blob = WIFF_blobs(self)
+		self.meta = WIFF_metas(self)
+		self.channel = WIFF_channels(self)
+		self.channelset = WIFF_channelsets(self)
+		self.annotation = WIFF_annotations(self)
+
+	@classmethod
+	def open(cls, fname):
+		if not os.path.exists(fname):
+			raise ValueError("File not found '%s'" % fname)
+
+		# Make object
+		w = cls(fname)
+
+		# TODO: verify basics of the database
+
+		return w
+
+	@classmethod
+	def new(cls, fname, props):
+		if os.path.exists(fname):
+			raise ValueError("File already exists '%s'" % fname)
+
+		w = cls(fname)
+
+		# Make schema
+		w.db.MakeDatabaseSchema()
+
+		# Set pragma's
+		w.db.setpragma()
+
+		# Initialize tables
+		w.db.begin()
+		id_r = w.db.recording.insert(start=props['start'], end=props['end'], description=props['description'], sampling=props['fs'])
+
+		# Meta data about the recording
+		w.db.meta.insert(key='WIFF.version', type='int', value='2')
+		w.db.meta.insert(key='WIFF.ctime', type='datetime', value=datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f"))
+
+		# Set channels
+		for c in props['channels']:
+			w.db.channel.insert(id_recording=id_r, idx=c['idx'], name=c['name'], bits=c['bits'], unit=c['unit'], comment=c['comment'])
+		w.db.commit()
+
+		return w
+
+	def add_segment(self, id_recording, channels, fidx_start, fidx_end, data, compression=None):
+		self.db.begin()
+
+		# Get maximum index and use next available (zero-based)
+		res = self.db.segment.select('idx', '`id_recording`=?', [id_recording])
+		rows = [_['idx'] for _ in res]
+		if len(rows):
+			idx = max(rows) + 1
+		else:
+			idx = 1
+
+		# Make a channel set
+		res = self.db.channelset.select('set')
+		rows = [_['set'] for _ in res]
+		if len(rows):
+			chanset = row['set'] + 1
+		else:
+			chanset = 1
+
+		# Add each channel to the set
+		for c in channels:
+			self.db.channelset.insert(set=chanset, id_channel=c)
+
+		# Add data and segment
+		id_blob = self.db.blob.insert(compression=compression, data=data)
+		id_segment = self.db.segment.insert(id_recording=id_recording, idx=idx, fidx_start=fidx_start, fidx_end=fidx_end, channelset_id=chanset, id_blob=id_blob)
+
+		# Make changes
+		self.db.commit()
+
+		return id_segment
+
 
 
 def open(fname):
@@ -251,11 +454,14 @@ def new(fname, props, force=False):
 		'description'	string describing the recording
 		'fs'			sampling frequency (int)
 		'channels'		list of channels
+			'idx'			channel index (zero based)
 			'name'			name of the channel
 			'bit'			bits (int) of each measurement
 			'unit'			physical units of the measurement (str)
 			'comment'		Arbitrary comment on the channel
 		'files'			list of files, probably empty (except for INFO file) for a new recording
 	"""
-	return WIFF.new(fname, props, force)
+
+	w = WIFF.new(fname, props)
+	return w
 

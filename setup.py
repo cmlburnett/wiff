@@ -1,6 +1,6 @@
 from setuptools import setup
 
-majv = 1
+majv = 2
 minv = 0
 
 setup(
