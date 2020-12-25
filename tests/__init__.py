@@ -97,10 +97,10 @@ class SimpleTests(unittest.TestCase):
 
 				self.assertEqual(len(w.segment), 0)
 				self.assertEqual(len(w.annotation), 0)
+				self.assertEqual(len(w.channelset), 0)
 
 			finally:
 				os.unlink(fname)
-
 
 	def test_addsegment(self):
 		with tempfile.NamedTemporaryFile() as f:
@@ -109,6 +109,7 @@ class SimpleTests(unittest.TestCase):
 				props = getprops()
 
 				w = wiff.new(fname, props)
+
 
 				self.assertEqual(len(w.segment), 0)
 
