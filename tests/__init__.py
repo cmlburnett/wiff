@@ -300,3 +300,15 @@ class SimpleTests(unittest.TestCase):
 			finally:
 				os.unlink(fname)
 
+	def template(self):
+		""" Copy this to start a new test """
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+
+				w = wiff.new(fname, props)
+
+			finally:
+				os.unlink(fname)
+
