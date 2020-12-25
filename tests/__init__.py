@@ -16,33 +16,37 @@ def getschema(fname):
 	s = subprocess.run(['sqlite3', fname, '.dump'], stdout=subprocess.PIPE)
 	return s.stdout
 
+def getprops():
+	props = {
+		'start': datetime.datetime.utcnow(),
+		'end': datetime.datetime.utcnow(),
+		'description': 'Test file',
+		'fs': 1000,
+		'channels': [
+			{
+				'idx': 0,
+				'name': 'left',
+				'bits': 16,
+				'unit': 'V',
+				'comment': 'Left channel',
+			},
+			{
+				'idx': 1,
+				'name': 'right',
+				'bits': 16,
+				'unit': 'V',
+				'comment': 'Right channel',
+			},
+		],
+	}
+	return props
+
 class SimpleTests(unittest.TestCase):
 	def test_basicsetup(self):
 		with tempfile.NamedTemporaryFile() as f:
 			fname = f.name + '.wiff'
 			try:
-				props = {
-					'start': datetime.datetime.utcnow(),
-					'end': datetime.datetime.utcnow(),
-					'description': 'Test file',
-					'fs': 1000,
-					'channels': [
-						{
-							'idx': 0,
-							'name': 'left',
-							'bits': 16,
-							'unit': 'V',
-							'comment': 'Left channel',
-						},
-						{
-							'idx': 1,
-							'name': 'right',
-							'bits': 16,
-							'unit': 'V',
-							'comment': 'Right channel',
-						},
-					],
-				}
+				props = getprops()
 
 				w = wiff.new(fname, props)
 
@@ -102,30 +106,11 @@ class SimpleTests(unittest.TestCase):
 		with tempfile.NamedTemporaryFile() as f:
 			fname = f.name + '.wiff'
 			try:
-				props = {
-					'start': datetime.datetime.utcnow(),
-					'end': datetime.datetime.utcnow(),
-					'description': 'Test file',
-					'fs': 1000,
-					'channels': [
-						{
-							'idx': 0,
-							'name': 'left',
-							'bits': 16,
-							'unit': 'V',
-							'comment': 'Left channel',
-						},
-						{
-							'idx': 1,
-							'name': 'right',
-							'bits': 16,
-							'unit': 'V',
-							'comment': 'Right channel',
-						},
-					],
-				}
+				props = getprops()
 
 				w = wiff.new(fname, props)
+
+				self.assertEqual(len(w.segment), 0)
 
 				w.add_segment(0, (0,1), 0, 2, b'hihihohobobo')
 
