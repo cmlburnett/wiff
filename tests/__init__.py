@@ -300,7 +300,7 @@ class SimpleTests(unittest.TestCase):
 			finally:
 				os.unlink(fname)
 
-	def test_multisegment(self):
+	def test_frame(self):
 		with tempfile.NamedTemporaryFile() as f:
 			fname = f.name + '.wiff'
 			try:
@@ -382,6 +382,84 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(fs[0], frames[7])
 				self.assertEqual(fs[1], frames[8])
 				self.assertEqual(fs[2], frames[9])
+
+			finally:
+				os.unlink(fname)
+
+	def test_frametable(self):
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+
+				w = wiff.new(fname, props)
+
+				frames = [
+					None,
+					(b'hi', b'ih'),
+					(b'ho', b'oh'),
+					(b'ob', b'bo'),
+
+					(b'xi', b'ix'),
+					(b'to', b'ot'),
+					(b'nu', b'un'),
+
+					(b'ra', b'ar'),
+					(b'ta', b'at'),
+					(b'pa', b'ap')
+				]
+
+				# Combine into strings
+				fs = [
+					frames[1][0] + frames[1][1] + frames[2][0] + frames[2][1] + frames[3][0] + frames[3][1],
+					frames[4][0] + frames[4][1] + frames[5][0] + frames[5][1] + frames[6][0] + frames[6][1],
+					frames[7][0] + frames[7][1] + frames[8][0] + frames[8][1] + frames[9][0] + frames[9][1]
+				]
+
+				# Add segments
+				r = w.recording[1]
+				w.add_segment(1, (1,2), 1, 3, fs[0])
+				w.add_segment(1, (1,2), 4, 6, fs[1])
+				w.add_segment(1, (1,2), 7, 9, fs[2])
+
+				# Get the frame table
+				ft = r.frame_table
+
+				self.assertEqual(ft.fidx_start, 1)
+				self.assertEqual(ft.fidx_end, 9)
+
+				self.assertIsNotNone(ft.get_segment(1))
+				self.assertIsNotNone(ft.get_segment(2))
+				self.assertIsNotNone(ft.get_segment(3))
+				self.assertIsNotNone(ft.get_segment(4))
+				self.assertIsNotNone(ft.get_segment(5))
+				self.assertIsNotNone(ft.get_segment(6))
+				self.assertIsNotNone(ft.get_segment(7))
+				self.assertIsNotNone(ft.get_segment(8))
+				self.assertIsNotNone(ft.get_segment(9))
+
+				self.assertEqual(ft.get_segment(1).fidx_start, 1)
+				self.assertEqual(ft.get_segment(1).fidx_end, 3)
+				self.assertEqual(ft.get_segment(2).fidx_start, 1)
+				self.assertEqual(ft.get_segment(2).fidx_end, 3)
+				self.assertEqual(ft.get_segment(3).fidx_start, 1)
+				self.assertEqual(ft.get_segment(3).fidx_end, 3)
+				self.assertEqual(ft.get_segment(4).fidx_start, 4)
+				self.assertEqual(ft.get_segment(4).fidx_end, 6)
+				self.assertEqual(ft.get_segment(5).fidx_start, 4)
+				self.assertEqual(ft.get_segment(5).fidx_end, 6)
+				self.assertEqual(ft.get_segment(6).fidx_start, 4)
+				self.assertEqual(ft.get_segment(6).fidx_end, 6)
+				self.assertEqual(ft.get_segment(7).fidx_start, 7)
+				self.assertEqual(ft.get_segment(7).fidx_end, 9)
+				self.assertEqual(ft.get_segment(8).fidx_start, 7)
+				self.assertEqual(ft.get_segment(8).fidx_end, 9)
+				self.assertEqual(ft.get_segment(9).fidx_start, 7)
+				self.assertEqual(ft.get_segment(9).fidx_end, 9)
+
+				# Just test some range of values, obviously can't be exhaustive
+				for i in range(10, 100):
+					self.assertRaises(ValueError, ft.get_segment, i)
 
 			finally:
 				os.unlink(fname)

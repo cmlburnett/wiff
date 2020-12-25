@@ -190,6 +190,52 @@ class WIFF_recording_frames(_WIFF_obj):
 		return tuple(ret)
 
 
+class WIFF_frame_table(_WIFF_obj):
+	def __init__(self, w, id_recording):
+		self._id_recording = id_recording
+
+		super().__init__(w)
+
+		self.refresh()
+
+	def refresh(self):
+		res = self._db.segment.select('rowid', '`id_recording`=?', [self._id_recording])
+		rows = [WIFF_segment(self._w, _['rowid']) for _ in res]
+
+		# Reset min and max
+		self._fidx_start = None
+		self._fidx_end = None
+
+		ends = []
+		self._table = {}
+		for row in rows:
+			# fidx_end is inclusive and r.stop is exclusive so have to add 1
+			r = range(row.fidx_start, row.fidx_end+1)
+			self._table[r] = row
+
+			ends.append(row.fidx_start)
+			ends.append(row.fidx_end)
+
+		# Find the ends
+		self._fidx_start = min(ends)
+		self._fidx_end = max(ends)
+
+	@property
+	def fidx_start(self): return self._fidx_start
+
+	@property
+	def fidx_end(self): return self._fidx_end
+
+	def get_segment(self, fidx):
+		"""
+		Gets the segment for the given frame index @fidx.
+		"""
+
+		for r in self._table:
+			if fidx in r:
+				return self._table[r]
+
+		raise ValueError("Frame index %d not found in this recording" % fidx)
 
 class WIFF_recording(_WIFF_obj_item):
 	def __init__(self, w, _id):
@@ -218,6 +264,10 @@ class WIFF_recording(_WIFF_obj_item):
 
 	@property
 	def frame(self): return WIFF_recording_frames(self._w, self._id)
+
+	@property
+	def frame_table(self):
+		return WIFF_frame_table(self._w, self._id)
 
 # ----------------------------------------
 
