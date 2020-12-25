@@ -102,6 +102,8 @@ class WIFF_recording(_WIFF_obj_item):
 	@property
 	def sampling(self): return self._data['sampling']
 
+# ----------------------------------------
+
 class WIFF_segments(_WIFF_obj_list):
 	def __init__(self, w):
 		self._sub_d = w.db.segment
@@ -137,6 +139,8 @@ class WIFF_segment(_WIFF_obj_item):
 	@property
 	def blob(self): return self._w.blob[ self._data['id_blob'] ]
 
+# ----------------------------------------
+
 class WIFF_blobs(_WIFF_obj_list):
 	def __init__(self, w):
 		self._sub_d = w.db.blob
@@ -153,6 +157,8 @@ class WIFF_blob(_WIFF_obj_item):
 
 	@property
 	def data(self): return self._data['data']
+
+# ----------------------------------------
 
 class WIFF_metas(_WIFF_obj_list):
 	def __init__(self, w):
@@ -192,6 +198,8 @@ class WIFF_meta(_WIFF_obj_item):
 		else:
 			raise TypeError("Unrecognized meta value type '%s' for value '%s'" % (t,v))
 
+# ----------------------------------------
+
 class WIFF_channels(_WIFF_obj_list):
 	def __init__(self, w):
 		self._sub_d = w.db.channel
@@ -221,6 +229,8 @@ class WIFF_channel(_WIFF_obj_item):
 	@property
 	def comment(self): return self._data['comment']
 
+# ----------------------------------------
+
 class WIFF_channelsets(_WIFF_obj_list):
 	def __init__(self, w):
 		self._sub_d = w.db.channelset
@@ -240,6 +250,8 @@ class WIFF_channelset(_WIFF_obj_item):
 
 	@property
 	def channel(self): return WIFF_channel(self._w, self._data['id_channel'])
+
+# ----------------------------------------
 
 class WIFF_annotations(_WIFF_obj_list):
 	def __init__(self, w):
