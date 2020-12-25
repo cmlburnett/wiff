@@ -1,5 +1,15 @@
 
 import datetime
+import itertools
+import sys
+
+def slice_to_gen(s):
+	start = s.start or 1
+	step = s.step or 1
+	stop = s.stop or sys.maxsize
+
+	for i in range(start, stop, step):
+		yield i
 
 # ------------------------------------------------------------------------
 # ------------------------------------------------------------------------
@@ -140,9 +150,21 @@ class WIFF_recording_frames(_WIFF_obj):
 		super().__init__(w)
 
 	def __getitem__(self, k):
-		row = self._db.segment.select_one(['rowid','id_blob'], '`fidx_start`<=? and `fidx_end`>=? and `id_recording`=?', [k,k, self._id_recording])
-		if row is None:
-			raise ValueError("No segment for this recording (%d) contains the frame %d" % (self._id_recording, k))
+		if type(k) is int:
+			row = self._db.segment.select_one(['rowid','id_blob'], '`fidx_start`<=? and `fidx_end`>=? and `id_recording`=?', [k,k, self._id_recording])
+			if row is None:
+				raise ValueError("No segment for this recording (%d) contains the frame %d" % (self._id_recording, k))
+
+		elif type(k) is slice:
+			# Inefficient way to handle slices but it works
+			if k.stop is None:
+				end = self._w.fidx_end(self._id_recording)
+
+				k = slice(k.start, end+1, k.step)
+			return [self[_] for _ in slice_to_gen(k)]
+
+		else:
+			raise TypeError("Unable to handle this type: %s" % k)
 
 		seg = WIFF_segment(self._w, row['rowid'])
 		b = WIFF_blob(self._w, row['id_blob'])

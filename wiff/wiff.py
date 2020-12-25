@@ -57,6 +57,20 @@ class WIFF:
 
 		return w
 
+	def fidx_end(self, id_recording):
+		"""
+		Get the current ending frame index in a particular recording.
+		If no segments are found for the recording, will return None.
+		"""
+
+		res = self.db.execute("select max(fidx_end) as fidx_end from `segment` where `id_recording`=?", (id_recording,))
+		row = res.fetchone()
+		if row is None:
+			# No segments found
+			return None
+		else:
+			return row['fidx_end']
+
 	def add_recording(self, start, end, description, sampling, channels):
 		self.db.begin()
 

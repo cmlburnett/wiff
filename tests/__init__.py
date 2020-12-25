@@ -358,6 +358,31 @@ class SimpleTests(unittest.TestCase):
 				f = r.frame[7]
 				self.assertEqual(f, frames[7])
 
+				f = r.frame[8]
+				self.assertEqual(f, frames[8])
+
+				f = r.frame[9]
+				self.assertEqual(f, frames[9])
+
+				# Test mid slice
+				fs = r.frame[2:4]
+				self.assertEqual(len(fs), 2)
+				self.assertEqual(fs[0], frames[2])
+				self.assertEqual(fs[1], frames[3])
+
+				# Test open start slice
+				fs = r.frame[:3]
+				self.assertEqual(len(fs), 2)
+				self.assertEqual(fs[0], frames[1])
+				self.assertEqual(fs[1], frames[2])
+
+				# Test open end slice
+				fs = r.frame[7:]
+				self.assertEqual(len(fs), 3)
+				self.assertEqual(fs[0], frames[7])
+				self.assertEqual(fs[1], frames[8])
+				self.assertEqual(fs[2], frames[9])
+
 			finally:
 				os.unlink(fname)
 
