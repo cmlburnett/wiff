@@ -113,7 +113,7 @@ class SimpleTests(unittest.TestCase):
 
 				self.assertEqual(len(w.segment), 0)
 
-				w.add_segment(1, (0,1), 0, 2, b'hihihohobobo')
+				w.add_segment(1, (1,2), 0, 2, b'hihihohobobo')
 
 				self.assertEqual(len(w.segment), 1)
 				s = w.segment[1]
@@ -134,11 +134,11 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(len(w.channelset), 2)
 				c = w.channelset[1]
 				self.assertEqual(c.set, 1)
-				self.assertEqual(c.id_channel, 0)
+				self.assertEqual(c.id_channel, 1)
 
 				c = w.channelset[2]
 				self.assertEqual(c.set, 1)
-				self.assertEqual(c.id_channel, 1)
+				self.assertEqual(c.id_channel, 2)
 
 			finally:
 				os.unlink(fname)
@@ -150,7 +150,7 @@ class SimpleTests(unittest.TestCase):
 				props = getprops()
 
 				w = wiff.new(fname, props)
-				w.add_segment(1, (0,1), 0, 2, b'hihihohobobo')
+				w.add_segment(1, (1,2), 0, 2, b'hihihohobobo')
 
 				self.assertEqual(len(w.annotation), 0)
 				w.add_annotation(1, 0,1, 'M', None, 'FIFO', None)
@@ -202,7 +202,7 @@ class SimpleTests(unittest.TestCase):
 
 
 				self.assertEqual(len(w.segment), 0)
-				w.add_segment(1, (0,1), 0, 2, b'hihihohobobo')
+				w.add_segment(1, (1,2), 0, 2, b'hihihohobobo')
 				self.assertEqual(len(w.segment), 1)
 
 
@@ -296,6 +296,67 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(len(r.channel), 2)
 				self.assertEqual(r.channel[cs[0]].unit, 'uV')
 				self.assertEqual(r.channel[cs[1]].unit, 'uV')
+
+			finally:
+				os.unlink(fname)
+
+	def test_multisegment(self):
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+
+				w = wiff.new(fname, props)
+
+				frames = [
+					None,
+					(b'hi', b'ih'),
+					(b'ho', b'oh'),
+					(b'ob', b'bo'),
+
+					(b'xi', b'ix'),
+					(b'to', b'ot'),
+					(b'nu', b'un'),
+
+					(b'ra', b'ar'),
+					(b'ta', b'at'),
+					(b'pa', b'ap')
+				]
+
+				# Combine into strings
+				fs = [
+					frames[1][0] + frames[1][1] + frames[2][0] + frames[2][1] + frames[3][0] + frames[3][1],
+					frames[4][0] + frames[4][1] + frames[5][0] + frames[5][1] + frames[6][0] + frames[6][1],
+					frames[7][0] + frames[7][1] + frames[8][0] + frames[8][1] + frames[9][0] + frames[9][1]
+				]
+
+				# Add segments
+				r = w.recording[1]
+				w.add_segment(1, (1,2), 1, 3, fs[0])
+				w.add_segment(1, (1,2), 4, 6, fs[1])
+				w.add_segment(1, (1,2), 7, 9, fs[2])
+
+				# Test each frame
+				f = r.frame[1]
+				self.assertEqual(f, frames[1])
+
+				f = r.frame[2]
+				self.assertEqual(f, frames[2])
+
+				f = r.frame[3]
+				self.assertEqual(f, frames[3])
+
+				f = r.frame[4]
+				self.assertEqual(f, frames[4])
+
+				f = r.frame[5]
+				self.assertEqual(f, frames[5])
+
+				f = r.frame[6]
+				self.assertEqual(f, frames[6])
+
+				f = r.frame[7]
+				self.assertEqual(f, frames[7])
 
 			finally:
 				os.unlink(fname)

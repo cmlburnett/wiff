@@ -133,6 +133,42 @@ class WIFF_recording_channels(_WIFF_obj_list):
 	def _query_len(self):
 		return self._sub_d.num_rows('`id_recording`=%d' % self._id_recording)
 
+class WIFF_recording_frames(_WIFF_obj):
+	def __init__(self, w, id_recording):
+		self._id_recording = id_recording
+
+		super().__init__(w)
+
+	def __getitem__(self, k):
+		row = self._db.segment.select_one(['rowid','id_blob'], '`fidx_start`<=? and `fidx_end`>=? and `id_recording`=?', [k,k, self._id_recording])
+		if row is None:
+			raise ValueError("No segment for this recording (%d) contains the frame %d" % (self._id_recording, k))
+
+		seg = WIFF_segment(self._w, row['rowid'])
+		b = WIFF_blob(self._w, row['id_blob'])
+
+		ret = []
+		# Calculate sum total of channels
+		stride = []
+		for cs in seg.channelset:
+			# Get number of bytes needed for the channel
+			q,r = divmod(cs.channel.bits, 8)
+			if r:
+				stride.append(q+1)
+			else:
+				stride.append(q)
+
+		# How many frames into the blob to read
+		offset = (k - seg.fidx_start) * sum(stride)
+
+		for s in stride:
+			ret.append( b.data[offset:offset+s] )
+			offset += s
+
+		return tuple(ret)
+
+
+
 class WIFF_recording(_WIFF_obj_item):
 	def __init__(self, w, _id):
 		super().__init__(w, _id, 'recording')
@@ -157,6 +193,9 @@ class WIFF_recording(_WIFF_obj_item):
 
 	@property
 	def channel(self): return WIFF_recording_channels(self._w, self._id)
+
+	@property
+	def frame(self): return WIFF_recording_frames(self._w, self._id)
 
 # ----------------------------------------
 
@@ -188,6 +227,11 @@ class WIFF_segment(_WIFF_obj_item):
 
 	@property
 	def channelset_id(self): return self._data['channelset_id']
+
+	@property
+	def channelset(self):
+		res = self._db.channelset.select('rowid', '`set`=?', [self._data['channelset_id']])
+		return [WIFF_channelset(self._w, _['rowid']) for _ in res]
 
 	@property
 	def id_blob(self): return self._data['id_blob']

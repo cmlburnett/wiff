@@ -84,7 +84,7 @@ class WIFF:
 		res = self.db.channelset.select('set')
 		rows = [_['set'] for _ in res]
 		if len(rows):
-			chanset = row['set'] + 1
+			chanset = max(rows) + 1
 		else:
 			chanset = 1
 
