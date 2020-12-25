@@ -1,12 +1,28 @@
 
 import datetime
 
+# ------------------------------------------------------------------------
+# ------------------------------------------------------------------------
+# Generic base classes
+
 class _WIFF_obj:
+	"""
+	Every object accepts the main WIFF object and copies in the DB object.
+	"""
+
 	def __init__(self, w):
 		self._w = w
 		self._db = w.db
 
 class _WIFF_obj_list(_WIFF_obj):
+	"""
+	Intended for list item style access to a type using the rowid as the key.
+
+	keys(), values(), items() return ata like the same functions on dict()
+	len() call on this object does a row count.
+	foo[rowid] gets a specific item
+	"""
+
 	def keys(self):
 		res = self.sub_d.select('rowid')
 		rows = [_['rowid'] for _ in res]
@@ -30,20 +46,38 @@ class _WIFF_obj_list(_WIFF_obj):
 		return self._sub_type(self._w, k)
 
 class _WIFF_obj_item(_WIFF_obj):
+	"""
+	Intended for individual object access
+
+	refresh() reloads the data from the database as no attempt is made to keep this object consistent.
+	id property is available on all objects as the rowid value.
+	"""
+
 	def __init__(self, w, _id, meta_name):
+		"""
+		Provide the rowid as @_id and the @meta_name is the name (eg, 'recording') which should be the table name in the DB.
+		"""
+
 		super().__init__(w)
 
+		# Pull out the sub table object from the database for this object
 		self._sub_d = getattr(w.db, meta_name)
 
 		self._id = _id
 
+		# Load in data now (rather than lazy loading)
 		self.refresh()
 
 	def refresh(self):
+		"""Reload the data from the database"""
 		self._data = self._sub_d.select_one('*', '`rowid`=?', [self._id])
 
 	@property
 	def id(self): return self._id
+
+# ------------------------------------------------------------------------
+# ------------------------------------------------------------------------
+# Specific object types
 
 class WIFF_recordings(_WIFF_obj_list):
 	def __init__(self, w):
