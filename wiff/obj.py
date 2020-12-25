@@ -23,8 +23,13 @@ class _WIFF_obj_list(_WIFF_obj):
 	foo[rowid] gets a specific item
 	"""
 
+	def _query(self):
+		return self.sub_d.select('rowid')
+	def _query_len(self):
+		return self._sub_d.num_rows()
+
 	def keys(self):
-		res = self.sub_d.select('rowid')
+		res = self._query()
 		rows = [_['rowid'] for _ in res]
 		return rows
 
@@ -40,7 +45,7 @@ class _WIFF_obj_list(_WIFF_obj):
 			yield k
 
 	def __len__(self):
-		return self._sub_d.num_rows()
+		return self._query_len()
 
 	def __getitem__(self, k):
 		return self._sub_type(self._w, k)
@@ -86,6 +91,48 @@ class WIFF_recordings(_WIFF_obj_list):
 
 		super().__init__(w)
 
+class WIFF_recording_segments(_WIFF_obj_list):
+	def __init__(self, w, id_recording):
+		self._id_recording = id_recording
+
+		self._sub_d = w.db.segment
+		self._sub_type = WIFF_segment
+
+		super().__init__(w)
+
+	def _query(self):
+		return self._sub_d.select('rowid', '`id_recording`=?', [self._id_recording])
+	def _query_len(self):
+		return self._sub_d.num_rows('`id_recording`=%d' % self._id_recording)
+
+class WIFF_recording_metas(_WIFF_obj_list):
+	def __init__(self, w, id_recording):
+		self._id_recording = id_recording
+
+		self._sub_d = w.db.meta
+		self._sub_type = WIFF_meta
+
+		super().__init__(w)
+
+	def _query(self):
+		return self._sub_d.select('rowid', '`id_recording`=?', [self._id_recording])
+	def _query_len(self):
+		return self._sub_d.num_rows('`id_recording`=%d' % self._id_recording)
+
+class WIFF_recording_channels(_WIFF_obj_list):
+	def __init__(self, w, id_recording):
+		self._id_recording = id_recording
+
+		self._sub_d = w.db.channel
+		self._sub_type = WIFF_channel
+
+		super().__init__(w)
+
+	def _query(self):
+		return self._sub_d.select('rowid', '`id_recording`=?', [self._id_recording])
+	def _query_len(self):
+		return self._sub_d.num_rows('`id_recording`=%d' % self._id_recording)
+
 class WIFF_recording(_WIFF_obj_item):
 	def __init__(self, w, _id):
 		super().__init__(w, _id, 'recording')
@@ -101,6 +148,15 @@ class WIFF_recording(_WIFF_obj_item):
 
 	@property
 	def sampling(self): return self._data['sampling']
+
+	@property
+	def segment(self): return WIFF_recording_segments(self._w, self._id)
+
+	@property
+	def meta(self): return WIFF_recording_metas(self._w, self._id)
+
+	@property
+	def channel(self): return WIFF_recording_channels(self._w, self._id)
 
 # ----------------------------------------
 

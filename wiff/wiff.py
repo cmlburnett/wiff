@@ -44,7 +44,6 @@ class WIFF:
 		w.db.setpragma()
 
 		# Initialize tables
-		w.db.begin()
 		id_r = w.db.recording.insert(start=props['start'], end=props['end'], description=props['description'], sampling=props['fs'])
 
 		# Meta data about the recording
@@ -57,6 +56,18 @@ class WIFF:
 		w.db.commit()
 
 		return w
+
+	def add_recording(self, start, end, description, sampling, channels):
+		self.db.begin()
+
+		id_recording = self.db.recording.insert(start=start, end=end, description=description, sampling=sampling)
+
+		for c in channels:
+			self.db.channel.insert(id_recording=id_recording, idx=c['idx'], name=c['name'], bits=c['bits'], unit=c['unit'], comment=c['comment'])
+
+		self.db.commit()
+
+		return id_recording
 
 	def add_segment(self, id_recording, channels, fidx_start, fidx_end, data, compression=None):
 		self.db.begin()
@@ -98,4 +109,13 @@ class WIFF:
 		self.db.commit()
 
 		return id_annotation
+
+	def add_meta(self, id_recording, key, typ, value):
+		self.db.begin()
+
+		id_meta = self.db.meta.insert(id_recording=id_recording, key=key, type=typ, value=value)
+
+		self.db.commit()
+
+		return id_meta
 

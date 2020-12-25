@@ -113,10 +113,11 @@ class SimpleTests(unittest.TestCase):
 
 				self.assertEqual(len(w.segment), 0)
 
-				w.add_segment(0, (0,1), 0, 2, b'hihihohobobo')
+				w.add_segment(1, (0,1), 0, 2, b'hihihohobobo')
 
 				self.assertEqual(len(w.segment), 1)
 				s = w.segment[1]
+				self.assertEqual(s.id_recording, 1)
 				self.assertEqual(s.id, 1)
 				self.assertEqual(s.idx, 1)
 				self.assertEqual(s.fidx_start, 0)
@@ -139,8 +140,6 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(c.set, 1)
 				self.assertEqual(c.id_channel, 1)
 
-
-				#print(getschema(fname).decode('ascii'))
 			finally:
 				os.unlink(fname)
 
@@ -151,7 +150,7 @@ class SimpleTests(unittest.TestCase):
 				props = getprops()
 
 				w = wiff.new(fname, props)
-				w.add_segment(0, (0,1), 0, 2, b'hihihohobobo')
+				w.add_segment(1, (0,1), 0, 2, b'hihihohobobo')
 
 				self.assertEqual(len(w.annotation), 0)
 				w.add_annotation(1, 0,1, 'M', None, 'FIFO', None)
@@ -164,6 +163,139 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(a.comment, None)
 				self.assertEqual(a.marker, 'FIFO')
 				self.assertEqual(a.data, None)
+
+			finally:
+				os.unlink(fname)
+
+	def test_addrecordings_segments(self):
+		"""
+		Check that WIFF_recording_segments filters appropriately
+		"""
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+				props2 = getprops()
+				props2['description'] = 'Second test'
+				props2['fs'] = 10000
+
+				w = wiff.new(fname, props)
+
+				# Add a second recording
+				self.assertEqual(len(w.recording), 1)
+				w.add_recording(props2['start'], props2['end'], props2['description'], props2['fs'], props2['channels'])
+				self.assertEqual(len(w.recording), 2)
+
+				r = w.recording[1]
+				self.assertEqual(r.id, 1)
+				self.assertEqual(r.start, props['start'])
+				self.assertEqual(r.end, props['end'])
+				self.assertEqual(r.description, props['description'])
+				self.assertEqual(r.sampling, props['fs'])
+
+				r = w.recording[2]
+				self.assertEqual(r.id, 2)
+				self.assertEqual(r.start, props2['start'])
+				self.assertEqual(r.end, props2['end'])
+				self.assertEqual(r.description, props2['description'])
+				self.assertEqual(r.sampling, props2['fs'])
+
+
+				self.assertEqual(len(w.segment), 0)
+				w.add_segment(1, (0,1), 0, 2, b'hihihohobobo')
+				self.assertEqual(len(w.segment), 1)
+
+
+				r = w.recording[1]
+				self.assertEqual(len(r.segment), 1)
+
+				r = w.recording[2]
+				self.assertEqual(len(r.segment), 0)
+
+			finally:
+				os.unlink(fname)
+
+	def test_addrecordings_metas(self):
+		"""
+		Check that WIFF_recording_meta filters appropriately
+		"""
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+				props2 = getprops()
+				props2['description'] = 'Second test'
+				props2['fs'] = 10000
+
+				w = wiff.new(fname, props)
+
+				# Add a second recording
+				self.assertEqual(len(w.recording), 1)
+				w.add_recording(props2['start'], props2['end'], props2['description'], props2['fs'], props2['channels'])
+				self.assertEqual(len(w.recording), 2)
+
+				self.assertEqual(len(w.meta), 2)
+
+				r = w.recording[1]
+				self.assertEqual(len(r.meta), 0)
+
+				r = w.recording[2]
+				self.assertEqual(len(r.meta), 0)
+
+
+				w.add_meta(2, 'test', 'int', 10)
+
+				r = w.recording[1]
+				self.assertEqual(len(r.meta), 0)
+
+				r = w.recording[2]
+				self.assertEqual(len(r.meta), 1)
+
+				m = r.meta.values()[0]
+				self.assertEqual(m.key, 'test')
+				self.assertEqual(m.type, 'int')
+				self.assertEqual(m.raw_value, '10')
+				self.assertEqual(m.value, 10)
+
+			finally:
+				os.unlink(fname)
+
+
+	def test_addrecordings_channels(self):
+		"""
+		Check that WIFF_recording_channels filters appropriately
+		"""
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+				props2 = getprops()
+				props2['description'] = 'Second test'
+				props2['fs'] = 10000
+				props2['channels'][0]['unit'] = 'uV'
+				props2['channels'][1]['unit'] = 'uV'
+
+				w = wiff.new(fname, props)
+
+				# Add a second recording
+				self.assertEqual(len(w.recording), 1)
+				w.add_recording(props2['start'], props2['end'], props2['description'], props2['fs'], props2['channels'])
+				self.assertEqual(len(w.recording), 2)
+
+
+				self.assertEqual(len(w.channel), 4)
+
+				r = w.recording[1]
+				cs = r.channel.keys()
+				self.assertEqual(len(r.channel), 2)
+				self.assertEqual(r.channel[cs[0]].unit, 'V')
+				self.assertEqual(r.channel[cs[1]].unit, 'V')
+
+				r = w.recording[2]
+				cs = r.channel.keys()
+				self.assertEqual(len(r.channel), 2)
+				self.assertEqual(r.channel[cs[0]].unit, 'uV')
+				self.assertEqual(r.channel[cs[1]].unit, 'uV')
 
 			finally:
 				os.unlink(fname)
