@@ -144,3 +144,27 @@ class SimpleTests(unittest.TestCase):
 			finally:
 				os.unlink(fname)
 
+	def test_addannotation(self):
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+
+				w = wiff.new(fname, props)
+				w.add_segment(0, (0,1), 0, 2, b'hihihohobobo')
+
+				self.assertEqual(len(w.annotation), 0)
+				w.add_annotation(1, 0,1, 'M', None, 'FIFO', None)
+				self.assertEqual(len(w.annotation), 1)
+
+				a = w.annotation[1]
+				self.assertEqual(a.fidx_start, 0)
+				self.assertEqual(a.fidx_end, 1)
+				self.assertEqual(a.type, 'M')
+				self.assertEqual(a.comment, None)
+				self.assertEqual(a.marker, 'FIFO')
+				self.assertEqual(a.data, None)
+
+			finally:
+				os.unlink(fname)
+

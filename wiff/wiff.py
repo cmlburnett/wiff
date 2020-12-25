@@ -90,3 +90,12 @@ class WIFF:
 
 		return id_segment
 
+	def add_annotation(self, id_recording, fidx_start, fidx_end, typ, comment, marker, data):
+		self.db.begin()
+
+		id_annotation = self.db.annotation.insert(id_recording=id_recording, fidx_start=fidx_start, fidx_end=fidx_end, type=typ, comment=comment, marker=marker, data=data)
+
+		self.db.commit()
+
+		return id_annotation
+
