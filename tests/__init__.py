@@ -752,6 +752,11 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(w.meta[cid].key, 'WIFF.monkey')
 				self.assertEqual(w.meta[cid].value, 99)
 
+				# I could rename but don't want to
+				#cid = id_recording=None
+				#aid = id_recording=1
+				#bid = id_recording=2
+
 			finally:
 				os.unlink(fname)
 
