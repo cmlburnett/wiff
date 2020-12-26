@@ -1,6 +1,5 @@
 
 import datetime
-import itertools
 import sys
 
 def slice_to_gen(s):
