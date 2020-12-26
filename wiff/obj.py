@@ -158,6 +158,25 @@ class WIFF_recording_frames(_WIFF_obj):
 			if row is None:
 				raise ValueError("No segment for this recording (%d) contains the frame %d" % (self._id_recording, k))
 
+			seg = WIFF_segment(self._w, row['rowid'])
+			b = WIFF_blob(self._w, row['id_blob'])
+
+			ret = []
+			# Calculate sum total of channels
+			stride = []
+			for cs in seg.channelset:
+				stride.append(cs.channel.storage)
+
+			# How many frames into the blob to read
+			offset = (k - seg.fidx_start) * sum(stride)
+
+			for s in stride:
+				ret.append( b.data[offset:offset+s] )
+				offset += s
+
+			return tuple(ret)
+
+
 		elif type(k) is slice:
 			if k.start is None:
 				k = slice(1, k.stop, k.step)
@@ -173,24 +192,6 @@ class WIFF_recording_frames(_WIFF_obj):
 
 		else:
 			raise TypeError("Unable to handle this type: %s" % k)
-
-		seg = WIFF_segment(self._w, row['rowid'])
-		b = WIFF_blob(self._w, row['id_blob'])
-
-		ret = []
-		# Calculate sum total of channels
-		stride = []
-		for cs in seg.channelset:
-			stride.append(cs.channel.storage)
-
-		# How many frames into the blob to read
-		offset = (k - seg.fidx_start) * sum(stride)
-
-		for s in stride:
-			ret.append( b.data[offset:offset+s] )
-			offset += s
-
-		return tuple(ret)
 
 
 class WIFF_frame_table(_WIFF_obj):
