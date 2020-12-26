@@ -151,11 +151,19 @@ class WIFF_recording_frames(_WIFF_obj):
 
 	def __getitem__(self, k):
 		if type(k) is int:
+			if k <= 0:
+				raise ValueError("Frame indices start with 1, cannot get zero or negative indices (%d)" % k)
+
 			row = self._db.segment.select_one(['rowid','id_blob'], '`fidx_start`<=? and `fidx_end`>=? and `id_recording`=?', [k,k, self._id_recording])
 			if row is None:
 				raise ValueError("No segment for this recording (%d) contains the frame %d" % (self._id_recording, k))
 
 		elif type(k) is slice:
+			if k.start is None:
+				k = slice(1, k.stop, k.step)
+			if k.start <= 0:
+				raise ValueError("Frame indices start with 1, cannot get zero or negative indices (%d)" % k.start)
+
 			# Inefficient way to handle slices but it works
 			if k.stop is None:
 				end = self._w.fidx_end(self._id_recording)
@@ -225,6 +233,9 @@ class WIFF_frame_table(_WIFF_obj):
 		"""
 		Gets the segment for the given frame index @fidx.
 		"""
+
+		if fidx <= 0:
+			raise ValueError("Frame indices start with 1, cannot get zero or negative indices (%d)" % fidx)
 
 		for r in self._table:
 			if fidx in r:
