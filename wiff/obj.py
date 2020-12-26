@@ -158,6 +158,24 @@ class WIFF_recording_channels(_WIFF_obj_list):
 	def _query_len(self):
 		return self._sub_d.num_rows('`id_recording`=%d' % self._id_recording)
 
+class WIFF_recording_annotations(_WIFF_obj_list):
+	"""
+	Handle WIFF.recording[x].annotation as filtered annotations by the recording ID.
+	"""
+	def __init__(self, w, id_recording):
+		self._id_recording = id_recording
+
+		self._sub_d = w.db.annotation
+		self._sub_type = WIFF_annotation
+
+		super().__init__(w)
+
+	# Change these queries to filter by id_recording
+	def _query(self):
+		return self._sub_d.select('rowid', '`id_recording`=?', [self._id_recording])
+	def _query_len(self):
+		return self._sub_d.num_rows('`id_recording`=%d' % self._id_recording)
+
 class WIFF_recording_frames(_WIFF_obj):
 	"""
 	Handle WIFF.recording[x].frame as filtered frames by the recording ID.
@@ -300,6 +318,9 @@ class WIFF_recording(_WIFF_obj_item):
 	def channel(self): return WIFF_recording_channels(self._w, self._id)
 
 	@property
+	def annotation(self): return WIFF_recording_annotations(self._w, self._id)
+
+	@property
 	def frame(self): return WIFF_recording_frames(self._w, self._id)
 
 	@property
@@ -393,6 +414,50 @@ class WIFF_metas(_WIFF_obj_list):
 		self._sub_type = WIFF_meta
 
 		super().__init__(w)
+
+	def find_as_dict(self, *args, **kwargs):
+		"""
+		Same as find(), but changes list to a dictionary keyed on the meta.key value.
+		"""
+		rows = self.find(*args, **kwargs)
+		return {_.key:_ for _ in rows}
+
+	def find(self, id_recording, key):
+		"""
+		Find a meta value with key @key that accepts a limited wildcard.
+		Keys are intended to be a dotted structural notation, and if the last part is an asterisk then it is substituted
+		Thus, find(None, 'WIFF.*' will get all keys starting with 'WIFF.' such as 'WIFF.version' and 'WIFF.ctime'.
+
+		Returned as a list of WIFF_meta objects.
+		"""
+		no_wild = True
+
+		parts = key.split('.')
+		if len(parts) > 1:
+			if parts[-1] == '*':
+				no_wild = False
+
+				# Escape percent signs
+				parts[0:-1] = [_.replace('%', '%%') for _ in parts[0:-1]]
+				# Exchange * for % to wild card SQL search
+				parts[-1] = '%'
+				key = '.'.join(parts)
+
+		if no_wild:
+			if id_recording is None:
+				res = self._sub_d.select('rowid', '`id_recording` is null and `key`=?', [key])
+			else:
+				res = self._sub_d.select('rowid', '`id_recording`=? and `key`=?', [id_recording, key])
+
+
+		# Has wild cards
+		else:
+			if id_recording is None:
+				res = self._sub_d.select('rowid', '`id_recording` is null and `key` like ?', [key])
+			else:
+				res = self._sub_d.select('rowid', '`id_recording`=? and `key` like ?', [id_recording, key])
+
+		return [self._sub_type(self._w, _['rowid']) for _ in res]
 
 class WIFF_meta(_WIFF_obj_item):
 	"""

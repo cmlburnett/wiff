@@ -148,30 +148,6 @@ class SimpleTests(unittest.TestCase):
 			finally:
 				os.unlink(fname)
 
-	def test_addannotation(self):
-		with tempfile.NamedTemporaryFile() as f:
-			fname = f.name + '.wiff'
-			try:
-				props = getprops()
-
-				w = wiff.new(fname, props)
-				w.add_segment(1, (1,2), 0, 2, b'hihihohobobo')
-
-				self.assertEqual(len(w.annotation), 0)
-				w.add_annotation(1, 0,1, 'M', None, 'FIFO', None)
-				self.assertEqual(len(w.annotation), 1)
-
-				a = w.annotation[1]
-				self.assertEqual(a.fidx_start, 0)
-				self.assertEqual(a.fidx_end, 1)
-				self.assertEqual(a.type, 'M')
-				self.assertEqual(a.comment, None)
-				self.assertEqual(a.marker, 'FIFO')
-				self.assertEqual(a.data, None)
-
-			finally:
-				os.unlink(fname)
-
 	def test_addrecordings_segments(self):
 		"""
 		Check that WIFF_recording_segments filters appropriately
@@ -477,6 +453,245 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(ft[1], frames[1])
 				self.assertEqual(ft[2], frames[2])
 				self.assertEqual(ft[3], frames[3])
+
+			finally:
+				os.unlink(fname)
+
+	def test_annotation(self):
+		""" Test annotations """
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+
+				w = wiff.new(fname, props)
+				w.add_segment(1, (1,2), 0, 2, b'hi\x00hiho\x00hobo\x00bo')
+				w.add_segment(1, (1,2), 3, 4, b'hi\x00hiho\x00hobo\x00bo')
+				w.add_segment(1, (1,2), 5, 6, b'hi\x00hiho\x00hobo\x00bo')
+
+				# Get the recording
+				r = w.recording[1]
+
+				self.assertEqual(len(w.annotation), 0)
+				self.assertEqual(len(r.annotation), 0)
+
+				w.add_annotation_C(1, 2,4, "Testing a comment")
+				self.assertEqual(len(w.annotation), 1)
+				self.assertEqual(len(r.annotation), 1)
+
+				w.add_annotation_M(1, 3,6, "STOP")
+				self.assertEqual(len(w.annotation), 2)
+				self.assertEqual(len(r.annotation), 2)
+
+				w.add_annotation_D(1, 1,1, "STRT", 52)
+				self.assertEqual(len(w.annotation), 3)
+				self.assertEqual(len(r.annotation), 3)
+
+
+				self.assertEqual(w.annotation[1].type, 'C')
+				self.assertEqual(w.annotation[2].type, 'M')
+				self.assertEqual(w.annotation[3].type, 'D')
+
+				self.assertEqual(w.annotation[1].comment, 'Testing a comment')
+				self.assertIsNone(w.annotation[1].marker)
+				self.assertIsNone(w.annotation[1].data)
+
+				self.assertIsNone(w.annotation[2].comment)
+				self.assertEqual(w.annotation[2].marker, 'STOP')
+				self.assertIsNone(w.annotation[2].data)
+
+				self.assertIsNone(w.annotation[3].comment)
+				self.assertEqual(w.annotation[3].marker, 'STRT')
+				self.assertEqual(w.annotation[3].data, 52)
+
+			finally:
+				os.unlink(fname)
+
+	def test_meta_file(self):
+		""" Test meta values against the file """
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+
+				w = wiff.new(fname, props)
+
+				w.add_segment(1, (1,2), 0, 2, b'hi\x00hiho\x00hobo\x00bo')
+				w.add_segment(1, (1,2), 3, 4, b'hi\x00hiho\x00hobo\x00bo')
+				w.add_segment(1, (1,2), 5, 6, b'hi\x00hiho\x00hobo\x00bo')
+
+				dt = datetime.datetime.utcnow()
+
+				r = w.recording[1]
+
+				# Accumulate meta ids here
+				a = {}
+
+				self.assertEqual(len(w.meta), 2)
+				self.assertEqual(len(r.meta), 0)
+				a[1] = w.add_meta_int(None, 'fooint', 42)
+
+				self.assertEqual(len(w.meta), 3)
+				self.assertEqual(len(r.meta), 0)
+				a[2] = w.add_meta_str(None, 'foostr', 'boo')
+
+				self.assertEqual(len(w.meta), 4)
+				self.assertEqual(len(r.meta), 0)
+				a[3] = w.add_meta_bool(None, 'footrue', True)
+
+				self.assertEqual(len(w.meta), 5)
+				self.assertEqual(len(r.meta), 0)
+				a[4] = w.add_meta_bool(None, 'foofalse', False)
+
+				self.assertEqual(len(w.meta), 6)
+				self.assertEqual(len(r.meta), 0)
+				a[5] = w.add_meta_datetime(None, 'foodt', dt)
+
+
+				self.assertEqual(w.meta[a[1]].key, 'fooint')
+				self.assertEqual(w.meta[a[1]].type, 'int')
+				self.assertEqual(w.meta[a[1]].value, 42)
+				self.assertEqual(w.meta[a[1]].raw_value, '42')
+
+				self.assertEqual(w.meta[a[2]].key, 'foostr')
+				self.assertEqual(w.meta[a[2]].type, 'str')
+				self.assertEqual(w.meta[a[2]].value, 'boo')
+				self.assertEqual(w.meta[a[2]].raw_value, 'boo')
+
+				self.assertEqual(w.meta[a[3]].key, 'footrue')
+				self.assertEqual(w.meta[a[3]].type, 'bool')
+				self.assertEqual(w.meta[a[3]].value, True)
+				self.assertEqual(w.meta[a[3]].raw_value, '1')
+
+				self.assertEqual(w.meta[a[4]].key, 'foofalse')
+				self.assertEqual(w.meta[a[4]].type, 'bool')
+				self.assertEqual(w.meta[a[4]].value, False)
+				self.assertEqual(w.meta[a[4]].raw_value, '0')
+
+				self.assertEqual(w.meta[a[5]].key, 'foodt')
+				self.assertEqual(w.meta[a[5]].type, 'datetime')
+				self.assertEqual(w.meta[a[5]].value, dt)
+				self.assertEqual(w.meta[a[5]].raw_value, dt.strftime("%Y-%m-%d %H:%M:%S.%f"))
+
+
+
+				# Search for them
+				c = w.meta.find(None, 'fooint')
+				self.assertIsNotNone(c)
+				self.assertEqual(len(c), 1)
+				self.assertEqual(c[0].id, a[1])
+				self.assertEqual(c[0].key, 'fooint')
+				self.assertEqual(c[0].value, 42)
+
+				c = w.meta.find(None, 'foostr')
+				self.assertIsNotNone(c)
+				self.assertEqual(len(c), 1)
+				self.assertEqual(c[0].id, a[2])
+				self.assertEqual(c[0].key, 'foostr')
+
+				c = w.meta.find(None, 'gibberish')
+				self.assertIsNotNone(c)
+				self.assertEqual(len(c), 0)
+
+				# Metas apply to file not a recording
+				c = w.meta.find(1, 'fooint')
+				self.assertIsNotNone(c)
+				self.assertEqual(len(c), 0)
+
+			finally:
+				os.unlink(fname)
+
+	def test_meta_recording(self):
+		""" Test meta values against a recording """
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+
+				w = wiff.new(fname, props)
+
+				w.add_segment(1, (1,2), 0, 2, b'hi\x00hiho\x00hobo\x00bo')
+				w.add_segment(1, (1,2), 3, 4, b'hi\x00hiho\x00hobo\x00bo')
+				w.add_segment(1, (1,2), 5, 6, b'hi\x00hiho\x00hobo\x00bo')
+
+				dt = datetime.datetime.utcnow()
+
+				r = w.recording[1]
+
+				# Accumulate meta ids here
+				a = {}
+
+				self.assertEqual(len(w.meta), 2)
+				self.assertEqual(len(r.meta), 0)
+				a[1] = w.add_meta_int(1, 'fooint', 42)
+
+				self.assertEqual(len(w.meta), 3)
+				self.assertEqual(len(r.meta), 1)
+				a[2] = w.add_meta_str(r.id, 'foostr', 'boo')
+
+				self.assertEqual(len(w.meta), 4)
+				self.assertEqual(len(r.meta), 2)
+				a[3] = w.add_meta_bool(r.id, 'footrue', True)
+
+				self.assertEqual(len(w.meta), 5)
+				self.assertEqual(len(r.meta), 3)
+				a[4] = w.add_meta_bool(r.id, 'foofalse', False)
+
+				self.assertEqual(len(w.meta), 6)
+				self.assertEqual(len(r.meta), 4)
+				a[5] = w.add_meta_datetime(r.id, 'foodt', dt)
+
+
+				self.assertEqual(r.meta[a[1]].key, 'fooint')
+				self.assertEqual(r.meta[a[1]].type, 'int')
+				self.assertEqual(r.meta[a[1]].value, 42)
+				self.assertEqual(r.meta[a[1]].raw_value, '42')
+
+				self.assertEqual(r.meta[a[2]].key, 'foostr')
+				self.assertEqual(r.meta[a[2]].type, 'str')
+				self.assertEqual(r.meta[a[2]].value, 'boo')
+				self.assertEqual(r.meta[a[2]].raw_value, 'boo')
+
+				self.assertEqual(r.meta[a[3]].key, 'footrue')
+				self.assertEqual(r.meta[a[3]].type, 'bool')
+				self.assertEqual(r.meta[a[3]].value, True)
+				self.assertEqual(r.meta[a[3]].raw_value, '1')
+
+				self.assertEqual(r.meta[a[4]].key, 'foofalse')
+				self.assertEqual(r.meta[a[4]].type, 'bool')
+				self.assertEqual(r.meta[a[4]].value, False)
+				self.assertEqual(r.meta[a[4]].raw_value, '0')
+
+				self.assertEqual(r.meta[a[5]].key, 'foodt')
+				self.assertEqual(r.meta[a[5]].type, 'datetime')
+				self.assertEqual(r.meta[a[5]].value, dt)
+				self.assertEqual(r.meta[a[5]].raw_value, dt.strftime("%Y-%m-%d %H:%M:%S.%f"))
+
+			finally:
+				os.unlink(fname)
+
+	def test_meta_find_wild(self):
+		""" Test dotted structure of meta finding """
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+
+				w = wiff.new(fname, props)
+
+				c = w.meta.find(None, 'WIFF.*')
+				start_cnt = len(c)
+
+
+				self.assertEqual(len(c), start_cnt)
+				aid = w.add_meta_int(None, "WIFF.monkey", 99)
+
+				c = w.meta.find_as_dict(None, 'WIFF.*')
+				self.assertEqual(len(c), start_cnt+1)
+				self.assertTrue('WIFF.monkey' in c)
+				self.assertEqual(c['WIFF.monkey'].id, aid)
+				self.assertEqual(c['WIFF.monkey'].key, 'WIFF.monkey')
+				self.assertEqual(c['WIFF.monkey'].value, 99)
 
 			finally:
 				os.unlink(fname)

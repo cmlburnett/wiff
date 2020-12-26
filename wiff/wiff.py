@@ -175,7 +175,7 @@ class WIFF:
 		"""
 		Adds a data ('D') annotation to a recording.
 		"""
-		return self.add_annotation(id_recording, fidx_start, fidx_end, typ='D', comment=comment, marker=marker, data=data)
+		return self.add_annotation(id_recording, fidx_start, fidx_end, typ='D', comment=None, marker=marker, data=data)
 
 	def add_annotation(self, id_recording, fidx_start, fidx_end, typ, comment, marker, data):
 		"""
@@ -202,6 +202,18 @@ class WIFF:
 
 		return id_annotation
 
+	def add_meta_int(self, id_recording, key, value):
+		return self.add_meta(id_recording, key, 'int', str(value))
+
+	def add_meta_str(self, id_recording, key, value):
+		return self.add_meta(id_recording, key, 'str', str(value))
+
+	def add_meta_bool(self, id_recording, key, value):
+		return self.add_meta(id_recording, key, 'bool', str(int(bool(value))))
+
+	def add_meta_datetime(self, id_recording, key, value):
+		return self.add_meta(id_recording, key, 'datetime', value.strftime("%Y-%m-%d %H:%M:%S.%f"))
+
 	def add_meta(self, id_recording, key, typ, value):
 		"""
 		Add a meta value to thie file (@id_recording is None) or to a recording.
@@ -221,6 +233,11 @@ class WIFF:
 		"""
 
 		self.db.begin()
+
+		# TODO: ensure key is unique to the id_recording value
+
+		# Get rid of excess whitespace on just the key
+		key = key.strip()
 
 		id_meta = self.db.meta.insert(id_recording=id_recording, key=key, type=typ, value=value)
 
