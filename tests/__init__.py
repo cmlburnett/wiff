@@ -760,6 +760,64 @@ class SimpleTests(unittest.TestCase):
 			finally:
 				os.unlink(fname)
 
+	def test_open_verify(self):
+		""" Create a schema and read it back """
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+
+				w = wiff.new(fname, props)
+				w.close()
+
+				# Opening is successful
+				w = wiff.open(fname)
+
+			finally:
+				os.unlink(fname)
+
+	def test_open_fail_extra_table(self):
+		""" Create a schema and fail by having an extra table """
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+
+				w = wiff.new(fname, props)
+
+				# Create an extra table
+				w.db.begin()
+				w.db.execute("create table `foo` (`bar` text)")
+				w.db.commit()
+				w.close()
+
+				# Should fail
+				self.assertRaises(Exception, wiff.open, fname)
+
+			finally:
+				os.unlink(fname)
+
+	def test_open_fail_absent_table(self):
+		""" Create a schema and fail by having an absent table """
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+
+				w = wiff.new(fname, props)
+
+				# Create an extra table
+				w.db.begin()
+				w.db.execute("drop table `meta`")
+				w.db.commit()
+				w.close()
+
+				# Should fail
+				self.assertRaises(Exception, wiff.open, fname)
+
+			finally:
+				os.unlink(fname)
+
 	def template(self):
 		""" Copy this to start a new test """
 		with tempfile.NamedTemporaryFile() as f:
