@@ -236,9 +236,6 @@ class WIFF:
 
 		# TODO: ensure key is unique to the id_recording value
 
-		# Get rid of excess whitespace on just the key
-		key = key.strip()
-
 		id_meta = self.db.meta.insert(id_recording=id_recording, key=key, type=typ, value=value)
 
 		self.db.commit()
