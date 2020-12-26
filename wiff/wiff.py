@@ -10,6 +10,7 @@ class WIFF:
 		self.db = wiffdb(fname)
 		self.db.open()
 
+		# A set of objects to make accessing easier
 		self.recording = WIFF_recordings(self)
 		self.segment = WIFF_segments(self)
 		self.blob = WIFF_blobs(self)
@@ -20,6 +21,9 @@ class WIFF:
 
 	@classmethod
 	def open(cls, fname):
+		"""
+		Open an existing WIFF file.
+		"""
 		if not os.path.exists(fname):
 			raise ValueError("File not found '%s'" % fname)
 
@@ -32,6 +36,9 @@ class WIFF:
 
 	@classmethod
 	def new(cls, fname, props):
+		"""
+		Create a new WIFF file
+		"""
 		if os.path.exists(fname):
 			raise ValueError("File already exists '%s'" % fname)
 
@@ -72,6 +79,22 @@ class WIFF:
 			return row['fidx_end']
 
 	def add_recording(self, start, end, description, sampling, channels):
+		"""
+		Add a new recording to the file.
+		Each file contains a number of recordings, recordings contain segments of data.
+
+		@start -- start datetime object
+		@end -- end datetime object
+		@description -- string description of the recording
+		@sampling -- samples per second of the recording
+		@channels -- list of channel definitions
+			'idx' -- index in the recording (1 based)
+			'name' -- name of the channel
+			'bits' -- number of BITS per sample
+			'storage' -- number of BYTES used to store each sample, calculated from bits if not supplied
+			'unit' -- string of the units the value means (eg, 'mV', 'mA')
+			'comment' -- string describing the channel
+		"""
 		self.db.begin()
 
 		id_recording = self.db.recording.insert(start=start, end=end, description=description, sampling=sampling)
@@ -85,13 +108,24 @@ class WIFF:
 				else:
 					c['storage'] = q
 
-			self.db.channel.insert(id_recording=id_recording, idx=c['idx'], name=c['name'], bits=c['bits'], unit=c['unit'], comment=c['comment'])
+			self.db.channel.insert(id_recording=id_recording, idx=c['idx'], name=c['name'], bits=c['bits'], unit=c['unit'], comment=c['comment'], storage=c['storage'])
 
 		self.db.commit()
 
 		return id_recording
 
 	def add_segment(self, id_recording, channels, fidx_start, fidx_end, data, compression=None):
+		"""
+		Add a new segment of data to a recording
+		Each file contains a number of recordings, recordings contain segments of data.
+
+		@id_recording -- recording.rowid that this segment belongs to
+		@channels -- tuple/list of channel.rowid that this segment includes (order matters)
+		@fidx_start -- starting frame index of the data
+		@fidx_end -- ending frame index of the data
+		@data -- binary data block representing all of the data
+		@compression -- string indicating the compression used on the data (None if none were used)
+		"""
 		self.db.begin()
 
 		# Get maximum index and use next available (zero-based)
@@ -127,7 +161,39 @@ class WIFF:
 
 		return id_segment
 
+	def add_annotation_C(self, id_recording, fidx_start, fidx_end, comment):
+		"""
+		Adds a comment ('C') annotation to a recording.
+		"""
+		return self.add_annotation(id_recording, fidx_start, fidx_end, typ='C', comment=comment, marker=None, data=None)
+	def add_annotation_M(self, id_recording, fidx_start, fidx_end, marker):
+		"""
+		Adds a marker ('M') annotation to a recording.
+		"""
+		return self.add_annotation(id_recording, fidx_start, fidx_end, typ='M', comment=None, marker=marker, data=None)
+	def add_annotation_D(self, id_recording, fidx_start, fidx_end, marker, data):
+		"""
+		Adds a data ('D') annotation to a recording.
+		"""
+		return self.add_annotation(id_recording, fidx_start, fidx_end, typ='D', comment=comment, marker=marker, data=data)
+
 	def add_annotation(self, id_recording, fidx_start, fidx_end, typ, comment, marker, data):
+		"""
+		Add an annotation to a recording.
+
+		@id_recording -- recording.rowid this annotation is attached to
+		@fidx_start -- Starting frame index of the annotation
+		@fidx_end -- Ending frame index of the annotation (same as start if applying to a single frame)
+		@typ -- a single letter indicating the annotation type
+		@comment -- a string comment, if the annotation type supports it
+		@marker -- a 4-character marker string, if the annotation type supports it
+		@data -- an integer data value, if the annotation type supports it
+
+		Annotation types:
+			'C' -- Comment (marker and data not included), useful for human annotating something specific (eg, patient symptoms)
+			'M' -- Marker (comment and data not included), useful for marking well-defined events (eg, QRS)
+			'D' -- Marker and data value (comment not included), useful for marking well-defined events that has additional interpretive meaning (eg, QRS duration)
+		"""
 		self.db.begin()
 
 		id_annotation = self.db.annotation.insert(id_recording=id_recording, fidx_start=fidx_start, fidx_end=fidx_end, type=typ, comment=comment, marker=marker, data=data)
@@ -137,6 +203,23 @@ class WIFF:
 		return id_annotation
 
 	def add_meta(self, id_recording, key, typ, value):
+		"""
+		Add a meta value to thie file (@id_recording is None) or to a recording.
+		Meta values are a key/value pair with all values stored as strings and @typ indicating how to interpret the string.
+
+		@id_recording -- recording to attach the meta value to (None means it applies to the file itself)
+		@key -- string key value
+		@typ -- string representing the way to interpret the @value (typically a python type)
+		@value -- string value value
+
+		Suggested types:
+			'int' -- integer
+			'str' -- string
+			'datetime' -- datetime.datetime.strptime("%Y-%m-%d %H:%M:%S.%f") value
+			'bool' -- boolean stored as integer (suggest '0' and '1' as the values)
+			'blob' -- binary storage and interpreted as a blob.rowid integer value
+		"""
+
 		self.db.begin()
 
 		id_meta = self.db.meta.insert(id_recording=id_recording, key=key, type=typ, value=value)

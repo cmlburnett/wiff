@@ -188,6 +188,8 @@ class WIFF_recording_frames(_WIFF_obj):
 			# How many frames into the blob to read
 			offset = (k - seg.fidx_start) * sum(stride)
 
+			# TODO: handle decompression
+
 			for s in stride:
 				ret.append( b.data[offset:offset+s] )
 				offset += s
@@ -420,6 +422,8 @@ class WIFF_meta(_WIFF_obj_item):
 			return v
 		elif t == 'datetime':
 			return datetime.datetime.strptime(v, "%Y-%m-%d %H:%M:%S.%f")
+		elif t == 'bool':
+			return bool(int(v))
 		elif t == 'blob':
 			# Interpret value as an id_blob
 			return WIFF_blob(self._w, int(v))
