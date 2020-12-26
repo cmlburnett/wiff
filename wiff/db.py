@@ -69,12 +69,10 @@ class wiffdb(SH):
 		),
 	]
 
-	def setpragma(self):
+	def setpragma(self, app_id):
 		# Application ID is the 32-bit value for WIFF
-		a = 'WIFF'.encode('ascii')
-		b = (a[0] << 24) + (a[1] << 16) + (a[2] << 8) + (a[3])
 		self.begin()
-		self.execute("pragma application_id=%d" % b)
+		self.execute("pragma application_id=%d" % app_id)
 		# Other pragmas?
 		self.commit()
 
