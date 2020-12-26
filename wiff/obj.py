@@ -430,12 +430,12 @@ class WIFF_metas(_WIFF_obj_list):
 
 		Returned as a list of WIFF_meta objects.
 		"""
-		no_wild = True
+		has_wild = False
 
 		parts = key.split('.')
 		if len(parts) > 1:
 			if parts[-1] == '*':
-				no_wild = False
+				has_wild = True
 
 				# Escape percent signs
 				parts[0:-1] = [_.replace('%', '%%') for _ in parts[0:-1]]
@@ -443,19 +443,18 @@ class WIFF_metas(_WIFF_obj_list):
 				parts[-1] = '%'
 				key = '.'.join(parts)
 
-		if no_wild:
-			if id_recording is None:
-				res = self._sub_d.select('rowid', '`id_recording` is null and `key`=?', [key])
-			else:
-				res = self._sub_d.select('rowid', '`id_recording`=? and `key`=?', [id_recording, key])
-
-
-		# Has wild cards
-		else:
+		if has_wild:
 			if id_recording is None:
 				res = self._sub_d.select('rowid', '`id_recording` is null and `key` like ?', [key])
 			else:
 				res = self._sub_d.select('rowid', '`id_recording`=? and `key` like ?', [id_recording, key])
+
+		# No wilds
+		else:
+			if id_recording is None:
+				res = self._sub_d.select('rowid', '`id_recording` is null and `key`=?', [key])
+			else:
+				res = self._sub_d.select('rowid', '`id_recording`=? and `key`=?', [id_recording, key])
 
 		return [self._sub_type(self._w, _['rowid']) for _ in res]
 
