@@ -117,6 +117,7 @@ class WIFF_recording_segments(_WIFF_obj_list):
 
 		super().__init__(w)
 
+	# Change these queries to filter by id_recording
 	def _query(self):
 		return self._sub_d.select('rowid', '`id_recording`=?', [self._id_recording])
 	def _query_len(self):
@@ -134,6 +135,7 @@ class WIFF_recording_metas(_WIFF_obj_list):
 
 		super().__init__(w)
 
+	# Change these queries to filter by id_recording
 	def _query(self):
 		return self._sub_d.select('rowid', '`id_recording`=?', [self._id_recording])
 	def _query_len(self):
@@ -151,6 +153,7 @@ class WIFF_recording_channels(_WIFF_obj_list):
 
 		super().__init__(w)
 
+	# Change these queries to filter by id_recording
 	def _query(self):
 		return self._sub_d.select('rowid', '`id_recording`=?', [self._id_recording])
 	def _query_len(self):
