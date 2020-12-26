@@ -243,6 +243,10 @@ class WIFF_frame_table(_WIFF_obj):
 
 		raise ValueError("Frame index %d not found in this recording" % fidx)
 
+	def __getitem__(self, k):
+		r = WIFF_recording(self._w, self._id_recording)
+		return r.frame[k]
+
 class WIFF_recording(_WIFF_obj_item):
 	def __init__(self, w, _id):
 		super().__init__(w, _id, 'recording')

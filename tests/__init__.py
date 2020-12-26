@@ -416,6 +416,7 @@ class SimpleTests(unittest.TestCase):
 
 				# Combine into strings
 				fs = [
+					None,
 					frames[1][0] + frames[1][1] + frames[2][0] + frames[2][1] + frames[3][0] + frames[3][1],
 					frames[4][0] + frames[4][1] + frames[5][0] + frames[5][1] + frames[6][0] + frames[6][1],
 					frames[7][0] + frames[7][1] + frames[8][0] + frames[8][1] + frames[9][0] + frames[9][1]
@@ -423,9 +424,9 @@ class SimpleTests(unittest.TestCase):
 
 				# Add segments
 				r = w.recording[1]
-				w.add_segment(1, (1,2), 1, 3, fs[0])
-				w.add_segment(1, (1,2), 4, 6, fs[1])
-				w.add_segment(1, (1,2), 7, 9, fs[2])
+				w.add_segment(1, (1,2), 1, 3, fs[1])
+				w.add_segment(1, (1,2), 4, 6, fs[2])
+				w.add_segment(1, (1,2), 7, 9, fs[3])
 
 				# Get the frame table
 				ft = r.frame_table
@@ -433,6 +434,7 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(ft.fidx_start, 1)
 				self.assertEqual(ft.fidx_end, 9)
 
+				# Ensure segments are returned
 				self.assertIsNotNone(ft.get_segment(1))
 				self.assertIsNotNone(ft.get_segment(2))
 				self.assertIsNotNone(ft.get_segment(3))
@@ -443,6 +445,7 @@ class SimpleTests(unittest.TestCase):
 				self.assertIsNotNone(ft.get_segment(8))
 				self.assertIsNotNone(ft.get_segment(9))
 
+				# Check that segments are returned correctly
 				self.assertEqual(ft.get_segment(1).fidx_start, 1)
 				self.assertEqual(ft.get_segment(1).fidx_end, 3)
 				self.assertEqual(ft.get_segment(2).fidx_start, 1)
@@ -463,8 +466,17 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(ft.get_segment(9).fidx_end, 9)
 
 				# Just test some range of values, obviously can't be exhaustive
+				#   -10 through 0 should throw ValueError exceptions
+				for i in range(-10, 1):
+					self.assertRaises(ValueError, ft.get_segment, i)
+				#   +10 and higher should also throw ValueError exceptions
 				for i in range(10, 100):
 					self.assertRaises(ValueError, ft.get_segment, i)
+
+				# Compare frame data
+				self.assertEqual(ft[1], frames[1])
+				self.assertEqual(ft[2], frames[2])
+				self.assertEqual(ft[3], frames[3])
 
 			finally:
 				os.unlink(fname)
