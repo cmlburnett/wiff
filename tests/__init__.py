@@ -696,6 +696,65 @@ class SimpleTests(unittest.TestCase):
 			finally:
 				os.unlink(fname)
 
+	def test_meta_duplicate_keys(self):
+		""" Test duplicate meta keys """
+		with tempfile.NamedTemporaryFile() as f:
+			fname = f.name + '.wiff'
+			try:
+				props = getprops()
+
+				w = wiff.new(fname, props)
+
+				c = w.meta.find(None, 'WIFF.*')
+				start_cnt = len(c)
+
+
+				self.assertEqual(len(c), start_cnt)
+				# Add key to recording
+				aid = w.add_meta_int(None, "WIFF.monkey", 99)
+
+				c = w.meta.find_as_dict(None, 'WIFF.*')
+				self.assertEqual(len(c), start_cnt+1)
+				self.assertTrue('WIFF.monkey' in c)
+				self.assertEqual(c['WIFF.monkey'].id, aid)
+				self.assertEqual(c['WIFF.monkey'].key, 'WIFF.monkey')
+				self.assertEqual(c['WIFF.monkey'].value, 99)
+				cid = c['WIFF.monkey'].id
+
+				# Should throw exception for duplicating key on the file
+				self.assertRaises(ValueError, w.add_meta_int, None, "WIFF.monkey", 98)
+
+				# Should NOT throw exception as this is adding to a recording
+				aid = w.add_meta_int(1, "WIFF.monkey", 97)
+				self.assertEqual(w.meta[aid].key, 'WIFF.monkey')
+				self.assertEqual(w.meta[aid].value, 97)
+
+
+				props2 = getprops()
+				props2['description'] = 'Second test'
+				props2['fs'] = 10000
+
+				# Add a second recording
+				self.assertEqual(len(w.recording), 1)
+				w.add_recording(props2['start'], props2['end'], props2['description'], props2['fs'], props2['channels'])
+				self.assertEqual(len(w.recording), 2)
+
+				# Should NOT throw exception as this is adding to a second recording
+				bid = w.add_meta_int(2, "WIFF.monkey", 96)
+				self.assertEqual(w.meta[bid].key, 'WIFF.monkey')
+				self.assertEqual(w.meta[bid].value, 96)
+
+				# Check that the other key wasn't modified (on first recording)
+				self.assertEqual(w.meta[aid].key, 'WIFF.monkey')
+				self.assertEqual(w.meta[aid].value, 97)
+
+				# Check that the other key wasn't modified (on file)
+				self.assertEqual(w.meta[cid].key, 'WIFF.monkey')
+				self.assertEqual(w.meta[cid].value, 99)
+
+			finally:
+				os.unlink(fname)
+
 	def template(self):
 		""" Copy this to start a new test """
 		with tempfile.NamedTemporaryFile() as f:

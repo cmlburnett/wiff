@@ -232,9 +232,16 @@ class WIFF:
 			'blob' -- binary storage and interpreted as a blob.rowid integer value
 		"""
 
-		self.db.begin()
+		#  ensure key is unique to the id_recording value
+		if id_recording is None:
+			row = self.db.meta.select_one('rowid', '`id_recording` is null and `key`=?', [key])
+		else:
+			row = self.db.meta.select_one('rowid', '`id_recording`=? and `key`=?', [id_recording, key])
 
-		# TODO: ensure key is unique to the id_recording value
+		if row is not None:
+			raise ValueError("Cannot insert meta value with duplicate key name (key=%s, id_recording=%s, meta.rowid=%d)" % (key, id_recording, row['rowid']))
+
+		self.db.begin()
 
 		id_meta = self.db.meta.insert(id_recording=id_recording, key=key, type=typ, value=value)
 
