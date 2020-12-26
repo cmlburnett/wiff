@@ -3,6 +3,10 @@ import datetime
 import sys
 
 def slice_to_gen(s):
+	"""
+	Slice objects can not be iterated, so run a generator over the parameters of the slice.
+	"""
+
 	start = s.start or 1
 	step = s.step or 1
 	stop = s.stop or sys.maxsize
