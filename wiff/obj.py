@@ -21,6 +21,7 @@ class _WIFF_obj:
 	"""
 
 	def __init__(self, w):
+		""" Initialize with the given WIFF object. """
 		self._w = w
 		self._db = w.db
 
@@ -30,7 +31,7 @@ class _WIFF_obj_list(_WIFF_obj):
 
 	keys(), values(), items() return ata like the same functions on dict()
 	len() call on this object does a row count.
-	foo[rowid] gets a specific item
+	foo[rowid] gets a specific item with the rowid
 	"""
 
 	def _query(self):
@@ -95,6 +96,9 @@ class _WIFF_obj_item(_WIFF_obj):
 # Specific object types
 
 class WIFF_recordings(_WIFF_obj_list):
+	"""
+	Handle WIFF.recording access to the recordings in the file.
+	"""
 	def __init__(self, w):
 		self._sub_d = w.db.recording
 		self._sub_type = WIFF_recording
@@ -102,6 +106,9 @@ class WIFF_recordings(_WIFF_obj_list):
 		super().__init__(w)
 
 class WIFF_recording_segments(_WIFF_obj_list):
+	"""
+	Handle WIFF.recording[x].segment as filtered segments by the recording ID.
+	"""
 	def __init__(self, w, id_recording):
 		self._id_recording = id_recording
 
@@ -116,6 +123,9 @@ class WIFF_recording_segments(_WIFF_obj_list):
 		return self._sub_d.num_rows('`id_recording`=%d' % self._id_recording)
 
 class WIFF_recording_metas(_WIFF_obj_list):
+	"""
+	Handle WIFF.recording[x].meta as filtered metas by the recording ID.
+	"""
 	def __init__(self, w, id_recording):
 		self._id_recording = id_recording
 
@@ -130,6 +140,9 @@ class WIFF_recording_metas(_WIFF_obj_list):
 		return self._sub_d.num_rows('`id_recording`=%d' % self._id_recording)
 
 class WIFF_recording_channels(_WIFF_obj_list):
+	"""
+	Handle WIFF.recording[x].channel as filtered channels by the recording ID.
+	"""
 	def __init__(self, w, id_recording):
 		self._id_recording = id_recording
 
@@ -144,6 +157,9 @@ class WIFF_recording_channels(_WIFF_obj_list):
 		return self._sub_d.num_rows('`id_recording`=%d' % self._id_recording)
 
 class WIFF_recording_frames(_WIFF_obj):
+	"""
+	Handle WIFF.recording[x].frame as filtered frames by the recording ID.
+	"""
 	def __init__(self, w, id_recording):
 		self._id_recording = id_recording
 
@@ -195,6 +211,9 @@ class WIFF_recording_frames(_WIFF_obj):
 
 
 class WIFF_frame_table(_WIFF_obj):
+	"""
+	Handle WIFF.recording[x].frame_table as a way to access segments, etc.
+	"""
 	def __init__(self, w, id_recording):
 		self._id_recording = id_recording
 
@@ -249,6 +268,9 @@ class WIFF_frame_table(_WIFF_obj):
 		return r.frame[k]
 
 class WIFF_recording(_WIFF_obj_item):
+	"""
+	Handle WIFF.recording[x] as filtered by the recording ID and access to recording specific lists like channels, metas, and frames.
+	"""
 	def __init__(self, w, _id):
 		super().__init__(w, _id, 'recording')
 
@@ -283,6 +305,9 @@ class WIFF_recording(_WIFF_obj_item):
 # ----------------------------------------
 
 class WIFF_segments(_WIFF_obj_list):
+	"""
+	Handle WIFF.segment access to all segments in the file.
+	"""
 	def __init__(self, w):
 		self._sub_d = w.db.segment
 		self._sub_type = WIFF_segment
@@ -290,6 +315,9 @@ class WIFF_segments(_WIFF_obj_list):
 		super().__init__(w)
 
 class WIFF_segment(_WIFF_obj_item):
+	"""
+	Handle WIFF.segment[x] access to a specific segment.
+	"""
 	def __init__(self, w, _id):
 		super().__init__(w, _id, 'segment')
 
@@ -328,6 +356,9 @@ class WIFF_segment(_WIFF_obj_item):
 # ----------------------------------------
 
 class WIFF_blobs(_WIFF_obj_list):
+	"""
+	Handle WIFF.blob access to all blobs in the file.
+	"""
 	def __init__(self, w):
 		self._sub_d = w.db.blob
 		self._sub_type = WIFF_blob
@@ -335,6 +366,9 @@ class WIFF_blobs(_WIFF_obj_list):
 		super().__init__(w)
 
 class WIFF_blob(_WIFF_obj_item):
+	"""
+	Handle WIFF.blob[x] access to a specific blob.
+	"""
 	def __init__(self, w, _id):
 		super().__init__(w, _id, 'blob')
 
@@ -347,6 +381,9 @@ class WIFF_blob(_WIFF_obj_item):
 # ----------------------------------------
 
 class WIFF_metas(_WIFF_obj_list):
+	"""
+	Handle WIFF.meta access to all metas in the file.
+	"""
 	def __init__(self, w):
 		self._sub_d = w.db.meta
 		self._sub_type = WIFF_meta
@@ -354,6 +391,9 @@ class WIFF_metas(_WIFF_obj_list):
 		super().__init__(w)
 
 class WIFF_meta(_WIFF_obj_item):
+	"""
+	Handle WIFF.meta[x] access to a specific segment.
+	"""
 	def __init__(self, w, _id):
 		super().__init__(w, _id, 'meta')
 
@@ -387,6 +427,9 @@ class WIFF_meta(_WIFF_obj_item):
 # ----------------------------------------
 
 class WIFF_channels(_WIFF_obj_list):
+	"""
+	Handle WIFF.channel access to all channels in the file.
+	"""
 	def __init__(self, w):
 		self._sub_d = w.db.channel
 		self._sub_type = WIFF_channel
@@ -394,6 +437,9 @@ class WIFF_channels(_WIFF_obj_list):
 		super().__init__(w)
 
 class WIFF_channel(_WIFF_obj_item):
+	"""
+	Handle WIFF.channel[x] access to a specific channel.
+	"""
 	def __init__(self, w, _id):
 		super().__init__(w, _id, 'channel')
 
@@ -421,6 +467,9 @@ class WIFF_channel(_WIFF_obj_item):
 # ----------------------------------------
 
 class WIFF_channelsets(_WIFF_obj_list):
+	"""
+	Handle WIFF.channelset access to all channelsets in the file.
+	"""
 	def __init__(self, w):
 		self._sub_d = w.db.channelset
 		self._sub_type = WIFF_channelset
@@ -428,6 +477,9 @@ class WIFF_channelsets(_WIFF_obj_list):
 		super().__init__(w)
 
 class WIFF_channelset(_WIFF_obj_item):
+	"""
+	Handle WIFF.channelset[x] access to a specific segment.
+	"""
 	def __init__(self, w, _id):
 		super().__init__(w, _id, 'channelset')
 
@@ -443,6 +495,9 @@ class WIFF_channelset(_WIFF_obj_item):
 # ----------------------------------------
 
 class WIFF_annotations(_WIFF_obj_list):
+	"""
+	Handle WIFF.annotation access to all annotations in the file.
+	"""
 	def __init__(self, w):
 		self._sub_d = w.db.annotation
 		self._sub_type = WIFF_annotation
@@ -450,6 +505,9 @@ class WIFF_annotations(_WIFF_obj_list):
 		super().__init__(w)
 
 class WIFF_annotation(_WIFF_obj_item):
+	"""
+	Handle WIFF.annotation[x] access to a specific annotation.
+	"""
 	def __init__(self, w, _id):
 		super().__init__(w, _id, 'annotation')
 
