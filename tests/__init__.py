@@ -12,10 +12,6 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-def getschema(fname):
-	s = subprocess.run(['sqlite3', fname, '.dump'], stdout=subprocess.PIPE)
-	return s.stdout
-
 def getprops():
 	props = {
 		'start': datetime.datetime.utcnow(),
