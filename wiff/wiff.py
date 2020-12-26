@@ -52,7 +52,7 @@ class WIFF:
 
 		# Set channels
 		for c in props['channels']:
-			w.db.channel.insert(id_recording=id_r, idx=c['idx'], name=c['name'], bits=c['bits'], unit=c['unit'], comment=c['comment'])
+			w.db.channel.insert(id_recording=id_r, idx=c['idx'], name=c['name'], bits=c['bits'], storage=c['storage'], unit=c['unit'], comment=c['comment'])
 		w.db.commit()
 
 		return w
@@ -77,6 +77,14 @@ class WIFF:
 		id_recording = self.db.recording.insert(start=start, end=end, description=description, sampling=sampling)
 
 		for c in channels:
+			# Define storage by using next byte size
+			if 'storage' not in c:
+				q,r = divmod(c['bits'], 8)
+				if r:
+					c['storage'] = q+1
+				else:
+					c['storage'] = q
+
 			self.db.channel.insert(id_recording=id_recording, idx=c['idx'], name=c['name'], bits=c['bits'], unit=c['unit'], comment=c['comment'])
 
 		self.db.commit()
@@ -103,12 +111,16 @@ class WIFF:
 			chanset = 1
 
 		# Add each channel to the set
+		stride = 0
 		for c in channels:
 			self.db.channelset.insert(set=chanset, id_channel=c)
 
+			ch = self.db.channel.select_one('storage', '`rowid`=?', [c])
+			stride += ch['storage']
+
 		# Add data and segment
 		id_blob = self.db.blob.insert(compression=compression, data=data)
-		id_segment = self.db.segment.insert(id_recording=id_recording, idx=idx, fidx_start=fidx_start, fidx_end=fidx_end, channelset_id=chanset, id_blob=id_blob)
+		id_segment = self.db.segment.insert(id_recording=id_recording, idx=idx, fidx_start=fidx_start, fidx_end=fidx_end, channelset_id=chanset, id_blob=id_blob, stride=stride)
 
 		# Make changes
 		self.db.commit()

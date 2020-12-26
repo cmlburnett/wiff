@@ -27,6 +27,7 @@ def getprops():
 				'idx': 0,
 				'name': 'left',
 				'bits': 16,
+				'storage': 2,
 				'unit': 'V',
 				'comment': 'Left channel',
 			},
@@ -34,6 +35,7 @@ def getprops():
 				'idx': 1,
 				'name': 'right',
 				'bits': 16,
+				'storage': 3,
 				'unit': 'V',
 				'comment': 'Right channel',
 			},
@@ -64,6 +66,7 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(c.id_recording, 1)
 				self.assertEqual(c.idx, 0)
 				self.assertEqual(c.bits, 16)
+				self.assertEqual(c.storage, 2)
 				self.assertEqual(c.name, 'left')
 				self.assertEqual(c.unit, 'V')
 				self.assertEqual(c.comment, 'Left channel')
@@ -72,6 +75,7 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(c.id_recording, 1)
 				self.assertEqual(c.idx, 1)
 				self.assertEqual(c.bits, 16)
+				self.assertEqual(c.storage, 3)
 				self.assertEqual(c.name, 'right')
 				self.assertEqual(c.unit, 'V')
 				self.assertEqual(c.comment, 'Right channel')
@@ -123,6 +127,7 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(s.fidx_start, 0)
 				self.assertEqual(s.fidx_end, 2)
 				self.assertEqual(s.channelset_id, 1)
+				self.assertEqual(s.stride, 5)
 				self.assertEqual(s.id_blob, 1)
 
 				self.assertEqual(len(w.blob), 1)
@@ -310,17 +315,17 @@ class SimpleTests(unittest.TestCase):
 
 				frames = [
 					None,
-					(b'hi', b'ih'),
-					(b'ho', b'oh'),
-					(b'ob', b'bo'),
+					(b'hi', b'\x00ih'),
+					(b'ho', b'\x00oh'),
+					(b'ob', b'\x00bo'),
 
-					(b'xi', b'ix'),
-					(b'to', b'ot'),
-					(b'nu', b'un'),
+					(b'xi', b'\x00ix'),
+					(b'to', b'\x00ot'),
+					(b'nu', b'\x00un'),
 
-					(b'ra', b'ar'),
-					(b'ta', b'at'),
-					(b'pa', b'ap')
+					(b'ra', b'\x00ar'),
+					(b'ta', b'\x00at'),
+					(b'pa', b'\x00ap')
 				]
 
 				# Combine into strings
@@ -396,17 +401,17 @@ class SimpleTests(unittest.TestCase):
 
 				frames = [
 					None,
-					(b'hi', b'ih'),
-					(b'ho', b'oh'),
-					(b'ob', b'bo'),
+					(b'hi', b'\x00ih'),
+					(b'ho', b'\x00oh'),
+					(b'ob', b'\x00bo'),
 
-					(b'xi', b'ix'),
-					(b'to', b'ot'),
-					(b'nu', b'un'),
+					(b'xi', b'\x00ix'),
+					(b'to', b'\x00ot'),
+					(b'nu', b'\x00un'),
 
-					(b'ra', b'ar'),
-					(b'ta', b'at'),
-					(b'pa', b'ap')
+					(b'ra', b'\x00ar'),
+					(b'ta', b'\x00at'),
+					(b'pa', b'\x00ap')
 				]
 
 				# Combine into strings

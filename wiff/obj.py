@@ -173,12 +173,7 @@ class WIFF_recording_frames(_WIFF_obj):
 		# Calculate sum total of channels
 		stride = []
 		for cs in seg.channelset:
-			# Get number of bytes needed for the channel
-			q,r = divmod(cs.channel.bits, 8)
-			if r:
-				stride.append(q+1)
-			else:
-				stride.append(q)
+			stride.append(cs.channel.storage)
 
 		# How many frames into the blob to read
 		offset = (k - seg.fidx_start) * sum(stride)
@@ -301,6 +296,9 @@ class WIFF_segment(_WIFF_obj_item):
 	def channelset_id(self): return self._data['channelset_id']
 
 	@property
+	def stride(self): return self._data['stride']
+
+	@property
 	def channelset(self):
 		res = self._db.channelset.select('rowid', '`set`=?', [self._data['channelset_id']])
 		return [WIFF_channelset(self._w, _['rowid']) for _ in res]
@@ -391,6 +389,9 @@ class WIFF_channel(_WIFF_obj_item):
 
 	@property
 	def bits(self): return self._data['bits']
+
+	@property
+	def storage(self): return self._data['storage']
 
 	@property
 	def name(self): return self._data['name']
