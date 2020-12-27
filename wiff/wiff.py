@@ -104,6 +104,11 @@ class WIFF:
 
 		# Set channels
 		for c in props['channels']:
+			if 'storage' not in c or c['storage'] is None:
+				# Pad to next full byte if partial
+				q,r = divmod(c['bits'], 8)
+				c['storage'] = q + (r and 1 or 0)
+
 			w.db.channel.insert(id_recording=id_r, idx=c['idx'], name=c['name'], bits=c['bits'], storage=c['storage'], unit=c['unit'], comment=c['comment'])
 		w.db.commit()
 
@@ -147,11 +152,9 @@ class WIFF:
 		for c in channels:
 			# Define storage by using next byte size
 			if 'storage' not in c:
+				# Pad to next full byte if partial
 				q,r = divmod(c['bits'], 8)
-				if r:
-					c['storage'] = q+1
-				else:
-					c['storage'] = q
+				c['storage'] = q + (r and 1 or 0)
 
 			self.db.channel.insert(id_recording=id_recording, idx=c['idx'], name=c['name'], bits=c['bits'], unit=c['unit'], comment=c['comment'], storage=c['storage'])
 
