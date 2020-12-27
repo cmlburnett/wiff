@@ -157,7 +157,7 @@ class WIFF:
 
 		return id_recording
 
-	def add_segment(self, id_recording, channels, fidx_start, fidx_end, data, compression=None):
+	def add_segment(self, id_recording, channels, fidx_start, fidx_end, id_blob):
 		"""
 		Add a new segment of data to a recording
 		Each file contains a number of recordings, recordings contain segments of data.
@@ -166,8 +166,7 @@ class WIFF:
 		@channels -- tuple/list of channel.rowid that this segment includes (order matters)
 		@fidx_start -- starting frame index of the data
 		@fidx_end -- ending frame index of the data
-		@data -- binary data block representing all of the data
-		@compression -- string indicating the compression used on the data (None if none were used)
+		@id_blob -- blob.rowid for the data for this segment
 		"""
 		self.db.begin()
 
@@ -196,13 +195,26 @@ class WIFF:
 			stride += ch['storage']
 
 		# Add data and segment
-		id_blob = self.db.blob.insert(compression=compression, data=data)
 		id_segment = self.db.segment.insert(id_recording=id_recording, idx=idx, fidx_start=fidx_start, fidx_end=fidx_end, channelset_id=chanset, id_blob=id_blob, stride=stride)
 
 		# Make changes
 		self.db.commit()
 
 		return id_segment
+
+	def add_blob(self, data, compression=None):
+		"""
+		Adds a blob.
+
+		@data -- binary data block representing all of the data
+		@compression -- string indicating the compression used on the data (None if none were used)
+		"""
+
+		self.db.begin()
+		id_blob = self.db.blob.insert(compression=compression, data=data)
+		self.db.commit()
+
+		return id_blob
 
 	def add_annotation_C(self, id_recording, fidx_start, fidx_end, comment):
 		"""

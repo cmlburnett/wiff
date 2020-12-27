@@ -113,7 +113,9 @@ class SimpleTests(unittest.TestCase):
 
 				self.assertEqual(len(w.segment), 0)
 
-				w.add_segment(1, (1,2), 0, 2, b'hihihohobobo')
+				bid = w.add_blob(b'hihihohobobo', None)
+
+				w.add_segment(1, (1,2), 0, 2, bid)
 
 				self.assertEqual(len(w.segment), 1)
 				s = w.segment[1]
@@ -178,8 +180,10 @@ class SimpleTests(unittest.TestCase):
 				self.assertEqual(r.sampling, props2['fs'])
 
 
+				bid = w.add_blob(b'hihihohobobo')
+
 				self.assertEqual(len(w.segment), 0)
-				w.add_segment(1, (1,2), 0, 2, b'hihihohobobo')
+				w.add_segment(1, (1,2), 0, 2, bid)
 				self.assertEqual(len(w.segment), 1)
 
 
@@ -307,11 +311,17 @@ class SimpleTests(unittest.TestCase):
 					frames[7][0] + frames[7][1] + frames[8][0] + frames[8][1] + frames[9][0] + frames[9][1]
 				]
 
+				bids = [
+					w.add_blob(fs[0]),
+					w.add_blob(fs[1]),
+					w.add_blob(fs[2]),
+				]
+
 				# Add segments
 				r = w.recording[1]
-				w.add_segment(1, (1,2), 1, 3, fs[0])
-				w.add_segment(1, (1,2), 4, 6, fs[1])
-				w.add_segment(1, (1,2), 7, 9, fs[2])
+				w.add_segment(1, (1,2), 1, 3, bids[0])
+				w.add_segment(1, (1,2), 4, 6, bids[1])
+				w.add_segment(1, (1,2), 7, 9, bids[2])
 
 				# Test each frame
 				f = r.frame[1]
@@ -394,11 +404,17 @@ class SimpleTests(unittest.TestCase):
 					frames[7][0] + frames[7][1] + frames[8][0] + frames[8][1] + frames[9][0] + frames[9][1]
 				]
 
+				bids = [
+					w.add_blob(fs[1]),
+					w.add_blob(fs[2]),
+					w.add_blob(fs[3]),
+				]
+
 				# Add segments
 				r = w.recording[1]
-				w.add_segment(1, (1,2), 1, 3, fs[1])
-				w.add_segment(1, (1,2), 4, 6, fs[2])
-				w.add_segment(1, (1,2), 7, 9, fs[3])
+				w.add_segment(1, (1,2), 1, 3, bids[0])
+				w.add_segment(1, (1,2), 4, 6, bids[1])
+				w.add_segment(1, (1,2), 7, 9, bids[2])
 
 				# Get the frame table
 				ft = r.frame_table
@@ -460,10 +476,16 @@ class SimpleTests(unittest.TestCase):
 			try:
 				props = getprops()
 
+				bids = [
+					b'hi\x00hiho\x00hobo\x00bo',
+					b'hi\x00hiho\x00hobo\x00bo',
+					b'hi\x00hiho\x00hobo\x00bo',
+				]
+
 				w = wiff.new(fname, props)
-				w.add_segment(1, (1,2), 0, 2, b'hi\x00hiho\x00hobo\x00bo')
-				w.add_segment(1, (1,2), 3, 4, b'hi\x00hiho\x00hobo\x00bo')
-				w.add_segment(1, (1,2), 5, 6, b'hi\x00hiho\x00hobo\x00bo')
+				w.add_segment(1, (1,2), 0, 2, bids[0])
+				w.add_segment(1, (1,2), 3, 4, bids[1])
+				w.add_segment(1, (1,2), 5, 6, bids[2])
 
 				# Get the recording
 				r = w.recording[1]
@@ -512,9 +534,15 @@ class SimpleTests(unittest.TestCase):
 
 				w = wiff.new(fname, props)
 
-				w.add_segment(1, (1,2), 0, 2, b'hi\x00hiho\x00hobo\x00bo')
-				w.add_segment(1, (1,2), 3, 4, b'hi\x00hiho\x00hobo\x00bo')
-				w.add_segment(1, (1,2), 5, 6, b'hi\x00hiho\x00hobo\x00bo')
+				bids = [
+					b'hi\x00hiho\x00hobo\x00bo',
+					b'hi\x00hiho\x00hobo\x00bo',
+					b'hi\x00hiho\x00hobo\x00bo',
+				]
+
+				w.add_segment(1, (1,2), 0, 2, bids[0])
+				w.add_segment(1, (1,2), 3, 4, bids[1])
+				w.add_segment(1, (1,2), 5, 6, bids[2])
 
 				dt = datetime.datetime.utcnow()
 
@@ -606,9 +634,15 @@ class SimpleTests(unittest.TestCase):
 
 				w = wiff.new(fname, props)
 
-				w.add_segment(1, (1,2), 0, 2, b'hi\x00hiho\x00hobo\x00bo')
-				w.add_segment(1, (1,2), 3, 4, b'hi\x00hiho\x00hobo\x00bo')
-				w.add_segment(1, (1,2), 5, 6, b'hi\x00hiho\x00hobo\x00bo')
+				bids = [
+					b'hi\x00hiho\x00hobo\x00bo',
+					b'hi\x00hiho\x00hobo\x00bo',
+					b'hi\x00hiho\x00hobo\x00bo',
+				]
+
+				w.add_segment(1, (1,2), 0, 2, bids[0])
+				w.add_segment(1, (1,2), 3, 4, bids[1])
+				w.add_segment(1, (1,2), 5, 6, bids[2])
 
 				dt = datetime.datetime.utcnow()
 
