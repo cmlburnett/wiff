@@ -510,6 +510,13 @@ class WIFF_channels(_WIFF_obj_list):
 
 		super().__init__(w)
 
+	def find_by_name(self, name):
+		row = self._db.channel.select_one('rowid', '`name`=?', [name])
+		if row is None:
+			return None
+		else:
+			return row['rowid']
+
 class WIFF_channel(_WIFF_obj_item):
 	"""
 	Handle WIFF.channel[x] access to a specific channel.
