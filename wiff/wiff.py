@@ -93,6 +93,8 @@ class WIFF:
 		# Set pragma's
 		w.db.setpragma(APPLICATION_ID)
 
+		w.db.begin()
+
 		# Initialize tables
 		id_r = w.db.recording.insert(start=props['start'], end=props['end'], description=props['description'], sampling=props['fs'])
 
