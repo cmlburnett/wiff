@@ -38,7 +38,7 @@ class _WIFF_obj_list(_WIFF_obj):
 	"""
 
 	def _query(self):
-		return self.sub_d.select('rowid')
+		return self._sub_d.select('rowid')
 	def _query_len(self):
 		return self._sub_d.num_rows()
 
