@@ -5,6 +5,7 @@ Nothing here should reference anything else in this library.
 
 import mmap
 import os
+import struct
 
 import bstruct
 
@@ -80,4 +81,64 @@ class NeedResizeException(Exception):
 	Exception thrown when the underlying file is too small and should be resized.
 	"""
 	pass
+
+class blob_builder:
+	"""
+	Wrapper around bytearray() and struct module to append binary data
+	from integer data.
+	Access Bytes property for the final byte string.
+	"""
+	def __init__(self):
+		self._dat = bytearray()
+
+	def add_u8(self, x): self._dat += struct.pack("<B", x)
+	def add_i8(self, x): self._dat += struct.pack("<b", x)
+
+	def add_u16(self, x): self._dat += struct.pack("<H", x)
+	def add_i16(self, x): self._dat += struct.pack("<h", x)
+
+	def add_u24(self, x): self._dat += struct.pack("<I", x)[0:3]
+	def add_i24(self, x): self._dat += struct.pack("<i", x)[0:3]
+
+	def add_u32(self, x): self._dat += struct.pack("<I", x)
+	def add_i32(self, x): self._dat += struct.pack("<i", x)
+
+	def add_u40(self, x): self._dat += struct.pack("<Q", x)[0:5]
+	def add_i40(self, x): self._dat += struct.pack("<q", x)[0:5]
+
+	def add_u48(self, x): self._dat += struct.pack("<Q", x)[0:6]
+	def add_i48(self, x): self._dat += struct.pack("<q", x)[0:6]
+
+	def add_u56(self, x): self._dat += struct.pack("<Q", x)[0:7]
+	def add_i56(self, x): self._dat += struct.pack("<q", x)[0:7]
+
+	def add_u64(self, x): self._dat += struct.pack("<Q", x)
+	def add_i64(self, x): self._dat += struct.pack("<q", x)
+
+	@property
+	def Bytes(self):
+		return bytes(self._dat)
+
+def range2d(x,y):
+	"""
+	Simple 2-dimensional generator that returns a 2-tuple of x,y values.
+	Makes code a little prettier and easier to write.
+		for (i,j) in range2d(1000,10):
+			...
+	"""
+	for i in range(x):
+		for j in range(y):
+			yield (i,j)
+
+def range3d(x,y,z):
+	"""
+	Simple 3-dimensional generator that returns a 3-tuple of x,y values.
+	Makes code a little prettier and easier to write.
+		for (i,j,k) in range2d(1000,10,5):
+			...
+	"""
+	for i in range(x):
+		for j in range(y):
+			for k in range(z):
+				yield (i,j,k)
 

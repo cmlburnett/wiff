@@ -31,6 +31,7 @@ Assumptions
 WIFF_VERSION = 2
 
 from .wiff import WIFF
+from .util import blob_builder, range2d, range3d
 
 def open(fname):
 	"""
