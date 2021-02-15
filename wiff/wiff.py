@@ -34,6 +34,13 @@ class WIFF:
 	def close(self):
 		self.db.close()
 
+	def __enter__(self):
+		return self
+
+	def __exit__(self, exc_type,exc_value,traceback):
+		self.close()
+		return
+
 	def reopen_db(self):
 		""" Can be a problem if accessed from a different thread. """
 		self.db.reopen()
