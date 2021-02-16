@@ -320,3 +320,21 @@ class WIFF:
 
 		return id_meta
 
+	def find_annotations_by_fidx(self, fidx_start,fidx_end):
+		if fidx_start is None and fidx_end is None:
+			raise ValueError("Must supply at least start or end frame index to search")
+		elif fidx_end is None:
+			# start specified, so anything from that index onward
+			res = self.db.annotation.select(['id_recording','fidx_start','fidx_end','type','comment','marker','data'], '? <= `fidx_end`', [fidx_start])
+
+		elif fidx_start is None:
+			# end specified, so anything from zero to that index
+			res = self.db.annotation.select(['id_recording','fidx_start','fidx_end','type','comment','marker','data'], '`fidx_start` <= ?', [fidx_end])
+
+		else:
+			# start and end specified
+			res = self.db.annotation.select(['id_recording','fidx_start','fidx_end','type','comment','marker','data'], '(`fidx_start` >= ? and ? <= `fidx_end`) or (`fidx_start` >= ? and ? <= `fidx_end`)', [fidx_start, fidx_end])
+
+		rows = [dict(_) for _ in res]
+		return rows
+
