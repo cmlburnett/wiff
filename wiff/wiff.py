@@ -325,7 +325,7 @@ class WIFF:
 			raise ValueError("Must supply at least start or end frame index to search")
 		elif fidx_end is None:
 			# start specified, so anything from that index onward
-			res = self.db.annotation.select(['id','id_recording','fidx_start','fidx_end','type','comment','marker','data'], '? <= `fidx_end`', [fidx_start])
+			res = self.db.annotation.select(['rowid','id_recording','fidx_start','fidx_end','type','comment','marker','data'], '? <= `fidx_end`', [fidx_start])
 
 		elif fidx_start is None:
 			# end specified, so anything from zero to that index
