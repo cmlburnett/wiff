@@ -613,3 +613,11 @@ class WIFF_annotation(_WIFF_obj_item):
 	@property
 	def data(self): return self._data['data']
 
+	def update(self, **kargs):
+		keys = ['id_recording','fidx_start','fidx_end','type','comment','marker','data']
+		for k in kargs:
+			if k not in keys:
+				raise KeyError("Received key that isn't known for an annotation: %s" % k)
+
+		return self._db.annotation.update({'rowid': self.id}, kargs)
+
