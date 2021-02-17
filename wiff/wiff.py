@@ -242,6 +242,7 @@ class WIFF:
 		Adds a marker ('M') annotation to a recording.
 		"""
 		return self.add_annotation(id_recording, fidx_start, fidx_end, typ='M', comment=None, marker=marker, data=None)
+
 	def add_annotation_D(self, id_recording, fidx_start, fidx_end, marker, data):
 		"""
 		Adds a data ('D') annotation to a recording.
@@ -333,7 +334,7 @@ class WIFF:
 
 		else:
 			# start and end specified
-			res = self.db.annotation.select(['id_recording','fidx_start','fidx_end','type','comment','marker','data'], '(`fidx_start` >= ? and ? <= `fidx_end`) or (`fidx_start` >= ? and ? <= `fidx_end`)', [fidx_start, fidx_end])
+			res = self.db.annotation.select(['id_recording','fidx_start','fidx_end','type','comment','marker','data'], '(`fidx_start` >= ? and ? <= `fidx_end`) or (`fidx_start` >= ? and ? <= `fidx_end`)', [fidx_start, fidx_start, fidx_end, fidx_end])
 
 		rows = [dict(_) for _ in res]
 		return rows
