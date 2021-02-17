@@ -623,3 +623,8 @@ class WIFF_annotation(_WIFF_obj_item):
 		self._db.annotation.update({'rowid': self.id}, kargs)
 		self._db.commit()
 
+	def delete(self):
+		self._db.begin()
+		self._db.annotation.delete({'rowid': self.id})
+		self._db.commit()
+
