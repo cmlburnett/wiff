@@ -334,7 +334,7 @@ class WIFF:
 
 		else:
 			# start and end specified
-			res = self.db.annotation.select(['rowid', 'id_recording','fidx_start','fidx_end','type','comment','marker','data'], '(`fidx_start` >= ? and ? <= `fidx_end`) or (`fidx_start` >= ? and ? <= `fidx_end`)', [fidx_start, fidx_start, fidx_end, fidx_end])
+			res = self.db.annotation.select(['rowid', 'id_recording','fidx_start','fidx_end','type','comment','marker','data'], '(`fidx_start` >= ? and `fidx_end` <= ?) or (`fidx_start` >= ? and `fidx_end` < ?)', [fidx_start, fidx_end, fidx_start, fidx_end])
 
 		rows = [dict(_) for _ in res]
 		return rows
