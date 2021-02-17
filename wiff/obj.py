@@ -619,5 +619,7 @@ class WIFF_annotation(_WIFF_obj_item):
 			if k not in keys:
 				raise KeyError("Received key that isn't known for an annotation: %s" % k)
 
-		return self._db.annotation.update({'rowid': self.id}, kargs)
+		self._db.begin()
+		self._db.annotation.update({'rowid': self.id}, kargs)
+		self._db.commit()
 
