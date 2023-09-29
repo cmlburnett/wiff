@@ -71,8 +71,7 @@ class wiffdb(SH):
 
 	def setpragma(self, app_id):
 		# Application ID is the 32-bit value for WIFF
-		self.begin()
-		self.execute("pragma application_id=%d" % app_id)
-		# Other pragmas?
-		self.commit()
+		with self.transaction():
+			self.execute(None, 'pragma', "pragma application_id=%d" % app_id)
+			# Other pragmas?
 

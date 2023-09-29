@@ -104,24 +104,22 @@ class WIFF:
 		# Set pragma's
 		w.db.setpragma(APPLICATION_ID)
 
-		w.db.begin()
+		with w.db.transaction():
+			# Initialize tables
+			id_r = w.db.recording.insert(start=props['start'], end=props['end'], description=props['description'], sampling=props['fs'])
 
-		# Initialize tables
-		id_r = w.db.recording.insert(start=props['start'], end=props['end'], description=props['description'], sampling=props['fs'])
+			# Meta data about the recording
+			w.db.meta.insert(key='WIFF.version', type='int', value='2')
+			w.db.meta.insert(key='WIFF.ctime', type='datetime', value=datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f"))
 
-		# Meta data about the recording
-		w.db.meta.insert(key='WIFF.version', type='int', value='2')
-		w.db.meta.insert(key='WIFF.ctime', type='datetime', value=datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f"))
+			# Set channels
+			for c in props['channels']:
+				if 'storage' not in c or c['storage'] is None:
+					# Pad to next full byte if partial
+					q,r = divmod(c['bits'], 8)
+					c['storage'] = q + (r and 1 or 0)
 
-		# Set channels
-		for c in props['channels']:
-			if 'storage' not in c or c['storage'] is None:
-				# Pad to next full byte if partial
-				q,r = divmod(c['bits'], 8)
-				c['storage'] = q + (r and 1 or 0)
-
-			w.db.channel.insert(id_recording=id_r, idx=c['idx'], name=c['name'], bits=c['bits'], storage=c['storage'], unit=c['unit'], comment=c['comment'])
-		w.db.commit()
+				w.db.channel.insert(id_recording=id_r, idx=c['idx'], name=c['name'], bits=c['bits'], storage=c['storage'], unit=c['unit'], comment=c['comment'])
 
 		return w
 

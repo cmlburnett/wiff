@@ -49,7 +49,7 @@ def new(fname, props, force=False):
 		'channels'		list of channels
 			'idx'			channel index (zero based)
 			'name'			name of the channel
-			'bit'			bits (int) of each measurement
+			'bits'			bits (int) of each measurement
 			'unit'			physical units of the measurement (str)
 			'comment'		Arbitrary comment on the channel
 		'files'			list of files, probably empty (except for INFO file) for a new recording
