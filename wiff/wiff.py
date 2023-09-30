@@ -182,37 +182,36 @@ class WIFF:
 		@fidx_end -- ending frame index of the data
 		@id_blob -- blob.rowid for the data for this segment
 		"""
-		self.db.begin()
+		if isinstance(id_recording, WIFF_recording):
+			id_recording = id_recording.id
 
-		# Get maximum index and use next available (zero-based)
-		res = self.db.segment.select('idx', '`id_recording`=?', [id_recording])
-		rows = [_['idx'] for _ in res]
-		if len(rows):
-			idx = max(rows) + 1
-		else:
-			idx = 1
+		with self.db.transaction():
+			# Get maximum index and use next available (zero-based)
+			res = self.db.segment.select('idx', '`id_recording`=?', [id_recording])
+			rows = [_['idx'] for _ in res]
+			if len(rows):
+				idx = max(rows) + 1
+			else:
+				idx = 1
 
-		# Make a channel set
-		res = self.db.channelset.select('set')
-		rows = [_['set'] for _ in res]
-		if len(rows):
-			chanset = max(rows) + 1
-		else:
-			chanset = 1
+			# Add each channel to the set
+			stride = 0
+			chans = []
+			for c in channels:
+				if isinstance(c, WIFF_channel):
+					cid = c.id
+				else:
+					cid = c
 
-		# Add each channel to the set
-		stride = 0
-		for c in channels:
-			self.db.channelset.insert(set=chanset, id_channel=c)
+				chans.append(cid)
 
-			ch = self.db.channel.select_one('storage', '`rowid`=?', [c])
-			stride += ch['storage']
+				ch = self.db.channel.select_one('storage', '`rowid`=?', [cid])
+				stride += ch['storage']
 
-		# Add data and segment
-		id_segment = self.db.segment.insert(id_recording=id_recording, idx=idx, fidx_start=fidx_start, fidx_end=fidx_end, channelset_id=chanset, id_blob=id_blob, stride=stride)
+			chanset = self.add_channelset(chans)
 
-		# Make changes
-		self.db.commit()
+			# Add data and segment
+			id_segment = self.db.segment.insert(id_recording=id_recording, idx=idx, fidx_start=fidx_start, fidx_end=fidx_end, channelset_id=chanset, id_blob=id_blob, stride=stride)
 
 		return id_segment
 
@@ -229,6 +228,56 @@ class WIFF:
 		self.db.commit()
 
 		return id_blob
+
+	def add_channelset(self, channels):
+		"""
+		Adds a channelset.
+
+		@channels -- a list of WIFF_channel objects or integers of the rowid of the channels.
+		"""
+
+		# Convert to a list of rowid's
+		chans = []
+		if isinstance(channels, WIFF_channels):
+			for idx in channels:
+				chans.append(channels[idx].id)
+		else:
+			for c in channels:
+				if isinstance(c, WIFF_channel):
+					chans.append(c.id)
+				else:
+					chans.append(c)
+
+		# This query will get all channel sets that have *AT LEAST* these channels
+		# Need to exclude sets that include other channels than @channels
+		c = ','.join([str(_) for _ in chans])
+		rows = self.db._execute('channelset', 'select', 'select `set` from `channelset` where `id_channel` in (%s) group by `set`' % c, [])
+		for row in rows:
+			res = self.db.channelset.select('id_channel', '`set`=?', [row['set']])
+			found = False
+			for resrow in res:
+				if resrow['id_channel'] not in chans:
+					# Found a channel that is in the set but not in @chans, therefore this set res['set'] is larger
+					# and includes more channels than desired
+					found = True
+					break
+			if not found:
+				# No extra channels, return this set number
+				return row['set']
+		else:
+			# Make a channel set
+			with self.db.transaction():
+				res = self.db._execute('channelset', 'select', 'select max(`set`) from `channelset` group by `set`', [])
+				rows = [_['set'] for _ in res]
+				if len(rows):
+					chanset = max(rows) + 1
+				else:
+					chanset = 1
+
+				for cid in chans:
+					self.db.channelset.insert(set=chanset, id_channel=cid)
+
+			return chanset
 
 	def add_annotation_C(self, id_recording, fidx_start, fidx_end, comment):
 		"""
