@@ -57,7 +57,7 @@ class WIFF:
 		w = cls(fname)
 
 		# Get the application_id value
-		res = w.db.execute("pragma application_id")
+		res = w.db.execute(None, 'pragma', "pragma application_id")
 		row = res.fetchone()
 		app_id = row[0]
 
@@ -65,11 +65,11 @@ class WIFF:
 		if app_id != APPLICATION_ID:
 			raise Exception("File is a sqlite file, but application_id is wrong (%d but should be %d)" % (app_id, APPLICATION_ID))
 
-		res = w.db.execute("select name from sqlite_master where type='table'")
+		res = w.db.execute('sqlite_master', 'select', "select name from sqlite_master where type='table'")
 		found = [_['name'] for _ in res]
 
 		# Expected table names
-		expected = [_.Name for _ in wiffdb.__schema__]
+		expected = [_.DBName for _ in wiffdb.__schema__]
 
 		found = set(found)
 		expected = set(expected)
@@ -129,7 +129,7 @@ class WIFF:
 		If no segments are found for the recording, will return None.
 		"""
 
-		res = self.db.execute("select max(fidx_end) as fidx_end from `segment` where `id_recording`=?", (id_recording,))
+		res = self.db.execute('segment', 'select', "select max(fidx_end) as fidx_end from `segment` where `id_recording`=?", (id_recording,))
 		row = res.fetchone()
 		if row is None:
 			# No segments found
