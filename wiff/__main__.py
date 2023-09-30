@@ -80,7 +80,7 @@ def _main_info(args):
 		vals.append( ('Frame End', s.fidx_end) )
 		vals.append( ('Channels', ",".join([str(_.channel.idx) for _ in s.channelset])) )
 		vals.append( ('Stride', s.stride) )
-		vals.append( ('Blod', s.id_blob) )
+		vals.append( ('Blob', s.id_blob) )
 
 		print()
 		print("  ---------- Segment #%d ----------" % i)
