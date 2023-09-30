@@ -154,20 +154,18 @@ class WIFF:
 			'unit' -- string of the units the value means (eg, 'mV', 'mA')
 			'comment' -- string describing the channel
 		"""
-		self.db.begin()
 
-		id_recording = self.db.recording.insert(start=start, end=end, description=description, sampling=sampling)
+		with self.db.transaction():
+			id_recording = self.db.recording.insert(start=start, end=end, description=description, sampling=sampling)
 
-		for c in channels:
-			# Define storage by using next byte size
-			if 'storage' not in c:
-				# Pad to next full byte if partial
-				q,r = divmod(c['bits'], 8)
-				c['storage'] = q + (r and 1 or 0)
+			for c in channels:
+				# Define storage by using next byte size
+				if 'storage' not in c:
+					# Pad to next full byte if partial
+					q,r = divmod(c['bits'], 8)
+					c['storage'] = q + (r and 1 or 0)
 
-			self.db.channel.insert(id_recording=id_recording, idx=c['idx'], name=c['name'], bits=c['bits'], unit=c['unit'], comment=c['comment'], storage=c['storage'])
-
-		self.db.commit()
+				self.db.channel.insert(id_recording=id_recording, idx=c['idx'], name=c['name'], bits=c['bits'], unit=c['unit'], comment=c['comment'], storage=c['storage'])
 
 		return id_recording
 
@@ -223,9 +221,8 @@ class WIFF:
 		@compression -- string indicating the compression used on the data (None if none were used)
 		"""
 
-		self.db.begin()
-		id_blob = self.db.blob.insert(compression=compression, data=data)
-		self.db.commit()
+		with self.db.transaction():
+			id_blob = self.db.blob.insert(compression=compression, data=data)
 
 		return id_blob
 
@@ -313,11 +310,9 @@ class WIFF:
 			'M' -- Marker (comment and data not included), useful for marking well-defined events (eg, QRS)
 			'D' -- Marker and data value (comment not included), useful for marking well-defined events that has additional interpretive meaning (eg, QRS duration)
 		"""
-		self.db.begin()
 
-		id_annotation = self.db.annotation.insert(id_recording=id_recording, fidx_start=fidx_start, fidx_end=fidx_end, type=typ, comment=comment, marker=marker, data=data)
-
-		self.db.commit()
+		with self.db.transaction():
+			id_annotation = self.db.annotation.insert(id_recording=id_recording, fidx_start=fidx_start, fidx_end=fidx_end, type=typ, comment=comment, marker=marker, data=data)
 
 		return id_annotation
 
@@ -360,11 +355,8 @@ class WIFF:
 		if row is not None:
 			raise ValueError("Cannot insert meta value with duplicate key name (key=%s, id_recording=%s, meta.rowid=%d)" % (key, id_recording, row['rowid']))
 
-		self.db.begin()
-
-		id_meta = self.db.meta.insert(id_recording=id_recording, key=key, type=typ, value=value)
-
-		self.db.commit()
+		with self.db.transaction():
+			id_meta = self.db.meta.insert(id_recording=id_recording, key=key, type=typ, value=value)
 
 		return id_meta
 
