@@ -2,6 +2,8 @@
 import datetime
 import sys
 
+import funpack
+
 def slice_to_gen(s):
 	"""
 	Slice objects can not be iterated, so run a generator over the parameters of the slice.
@@ -331,6 +333,39 @@ class WIFF_recording(_WIFF_obj_item):
 	@property
 	def frame_table(self):
 		return WIFF_frame_table(self._w, self._id)
+
+	def GetAllFrames(self):
+		"""
+		Iterates through all segments and returns each frame.
+		Efficient way to parse through blobs just once per segment.
+		"""
+
+		# Iterate over each segment
+		for s in self.segment.values():
+			cs = s.channelset
+			chans = [_.channel for _ in cs]
+			# Just channel names to yield
+			chans_nice = [c.name for c in chans]
+			b = s.blob
+
+			if b.compression is not None:
+				raise ValueError("Compression not implemented")
+
+			for x in range(0, s.fidx_end - s.fidx_start + 1):
+				off = x * s.stride
+				f = funpack.funpack(b.data[off:off+s.stride], 'little')
+
+				ret = []
+				for c in chans:
+					if c.storage == 1: ret.append(f.u8())
+					elif c.storage == 2: ret.append(f.u16())
+					elif c.storage == 4: ret.append(f.u32())
+					elif c.storage == 8: ret.append(f.u64())
+					else:
+						raise ValueError("Unable to handle storage size %d in frame %d for channel %s" % (c.storage, x + s.fidx_start, c.name))
+
+				# Give the absolute frame number, channel names, and the raw data
+				yield (s.fidx_start + x, chans_nice, ret)
 
 # ----------------------------------------
 
