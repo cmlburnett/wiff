@@ -52,6 +52,7 @@ class _WIFF_obj_list(_WIFF_obj):
 		return [_t(self._w, _) for _ in self.keys()]
 
 	def items(self):
+		_t = self._sub_type
 		return [(_, _t(self._w, _)) for _ in self.keys()]
 
 	def __iter__(self):
