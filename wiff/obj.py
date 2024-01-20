@@ -355,6 +355,8 @@ class WIFF_recording(_WIFF_obj_item):
 				off = x * s.stride
 				f = funpack.funpack(b.data[off:off+s.stride], 'little')
 
+				# TODO: option to scale by DigitalMinValue, DigitalMaxValue, AnalogMinValue, and AnalogMaxvalue
+
 				ret = []
 				for c in chans:
 					if c.storage == 1: ret.append(f.u8())
@@ -580,6 +582,57 @@ class WIFF_channel(_WIFF_obj_item):
 
 	@property
 	def comment(self): return self._data['comment']
+
+	@property
+	def digitalminvalue(self): return self._data['digitalminvalue']
+
+	@property
+	def digitalmaxvalue(self): return self._data['digitalmaxvalue']
+
+	@property
+	def analogminvalue(self): return self._data['analogminvalue']
+
+	@property
+	def analogmaxvalue(self): return self._data['analogmaxvalue']
+
+	def MapValue_DigitalToAnalog(self, val):
+		"""
+		Map the digital value @val to the analog value
+		"""
+
+		dmin = self.digitalminvalue
+		dmax = self.digitalmaxvalue
+		amin = self.analogminvalue
+		amax = self.analogmaxvalue
+
+		if val < dmin:
+			raise ValueError("Value %d is less than expected digital minimum value (%d)" % (val, dmin))
+		if val > dmax:
+			raise ValueError("Value %d is greater than expected ditial maximum value (%d)" % (val, dmax))
+
+		# Scale from [dmin,dmax] to [amin,amax]
+		s = float(val - dmin)/dmax
+		return amin + ((amax - amin)*s)
+
+	def MapValue_AnalogToDigital(self, val):
+		"""
+		Map the analog value @val to the digital value.
+		"""
+
+		dmin = self.digitalminvalue
+		dmax = self.digitalmaxvalue
+		amin = self.analogminvalue
+		amax = self.analogmaxvalue
+
+		if val < amin:
+			raise ValueError("Value %d is less than expected analog minimum value (%d)" % (val, amin))
+		if val > amax:
+			raise ValueError("Value %d is greater than expected analog maximum value (%d)" % (val, amax))
+
+		# Scale from [dmin,dmax] to [amin,amax]
+		s = float(val - amin)/amax
+		return round(dmin + ((dmax - dmin)*s))
+
 
 # ----------------------------------------
 
