@@ -296,28 +296,29 @@ class WIFF:
 
 			return chanset
 
-	def add_annotation_C(self, id_recording, fidx_start, fidx_end, comment):
+	def add_annotation_C(self, id_recording, id_channelset, fidx_start, fidx_end, comment):
 		"""
-		Adds a comment ('C') annotation to a recording.
+		Adds a comment ('C') annotation to a recording and the channel set (None means all channels).
 		"""
-		return self.add_annotation(id_recording, fidx_start, fidx_end, typ='C', comment=comment, marker=None, data=None)
-	def add_annotation_M(self, id_recording, fidx_start, fidx_end, marker):
+		return self.add_annotation(id_recording, id_channelset, fidx_start, fidx_end, typ='C', comment=comment, marker=None, data=None)
+	def add_annotation_M(self, id_recording, id_channelset, fidx_start, fidx_end, marker):
 		"""
-		Adds a marker ('M') annotation to a recording.
+		Adds a marker ('M') annotation to a recording and the channel set (None means all channels).
 		"""
 		return self.add_annotation(id_recording, fidx_start, fidx_end, typ='M', comment=None, marker=marker, data=None)
 
-	def add_annotation_D(self, id_recording, fidx_start, fidx_end, marker, data):
+	def add_annotation_D(self, id_recording, id_channelset, fidx_start, fidx_end, marker, data):
 		"""
-		Adds a data ('D') annotation to a recording.
+		Adds a data ('D') annotation to a recording and the channel set (None means all channels).
 		"""
-		return self.add_annotation(id_recording, fidx_start, fidx_end, typ='D', comment=None, marker=marker, data=data)
+		return self.add_annotation(id_recording, id_channelset, fidx_start, fidx_end, typ='D', comment=None, marker=marker, data=data)
 
-	def add_annotation(self, id_recording, fidx_start, fidx_end, typ, comment, marker, data):
+	def add_annotation(self, id_recording, id_channelset, fidx_start, fidx_end, typ, comment, marker, data):
 		"""
-		Add an annotation to a recording.
+		Add an annotation to a recording and the channel set (None means all channels).
 
 		@id_recording -- recording.rowid this annotation is attached to
+		@id_channelset -- channelset.rowid this annotation is attached to, None means all available channels
 		@fidx_start -- Starting frame index of the annotation
 		@fidx_end -- Ending frame index of the annotation (same as start if applying to a single frame)
 		@typ -- a single letter indicating the annotation type
@@ -332,7 +333,7 @@ class WIFF:
 		"""
 
 		with self.db.transaction():
-			id_annotation = self.db.annotation.insert(id_recording=id_recording, fidx_start=fidx_start, fidx_end=fidx_end, type=typ, comment=comment, marker=marker, data=data)
+			id_annotation = self.db.annotation.insert(id_recording=id_recording, id_channelset=id_channelset, fidx_start=fidx_start, fidx_end=fidx_end, type=typ, comment=comment, marker=marker, data=data)
 
 		return id_annotation
 

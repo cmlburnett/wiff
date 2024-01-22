@@ -70,6 +70,7 @@ class wiffdb(SH):
 		DBTable('annotation',
 			DBColROWID(),
 			DBCol('id_recording', 'integer'),
+			DBCol('id_channelset', 'integer'),
 			DBCol('fidx_start', 'integer'),
 			DBCol('fidx_end', 'integer'),
 			DBCol('type', 'text'),
