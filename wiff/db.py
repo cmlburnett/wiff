@@ -4,6 +4,12 @@ from sqlitehelper import SH, DBTable, DBCol, DBColROWID
 
 class wiffdb(SH):
 	__schema__ = [
+		# General settings (not meta data)
+		DBTable('settings',
+			DBColROWID(),
+			DBCol('key', 'text'),
+			DBCol('value', 'text'),
+		),
 		# Recording consists of multiple segments
 		DBTable('recording',
 			DBColROWID(),

@@ -9,6 +9,7 @@ from .obj import *
 #   a = 'WIFF'.encode('ascii')
 #   b = (a[0] << 24) + (a[1] << 16) + (a[2] << 8) + (a[3])
 APPLICATION_ID = 1464419910
+WIFF_VERSION = 2
 
 class WIFF:
 	"""
@@ -32,6 +33,7 @@ class WIFF:
 		self.annotation = WIFF_annotations(self)
 
 	def close(self):
+		# TODO: update times in settings
 		self.db.close()
 
 	def __enter__(self):
@@ -65,6 +67,16 @@ class WIFF:
 		if app_id != APPLICATION_ID:
 			raise Exception("File is a sqlite file, but application_id is wrong (%d but should be %d)" % (app_id, APPLICATION_ID))
 
+		# Check file version
+		row = w.db.settings.select_one('value', "`key`='WIFF.Version'")
+		if row is None:
+			raise ValueError("WIFF file does not contain a settings table, file is malformed")
+		else:
+			v = int(row['value'])
+			if v != WIFF_VERSION:
+				raise ValueError("WIFF file is version %d but this library only reads version %d, cannot open" % (v, WIFF_VERSION))
+
+		# Make sure tables are present
 		res = w.db.execute('sqlite_master', 'select', "select name from sqlite_master where type='table'")
 		found = [_['name'] for _ in res]
 
@@ -105,12 +117,20 @@ class WIFF:
 		w.db.setpragma(APPLICATION_ID)
 
 		with w.db.transaction():
+			ctime = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")
+
+			# Set wiff version
+			w.db.settings.insert(key='WIFF.version', value=str(WIFF_VERSION))
+			w.db.settings.insert(key='WIFF.CreationTime', value=ctime)
+			w.db.settings.insert(key='WIFF.ModificationTime', value=ctime)
+			w.db.settings.insert(key='WIFF.LastOpenTime', value=ctime)
+
 			# Initialize tables
 			id_r = w.db.recording.insert(start=props['start'], end=props['end'], description=props['description'], sampling=props['fs'])
 
 			# Meta data about the recording
-			w.db.meta.insert(key='WIFF.version', type='int', value='2')
-			w.db.meta.insert(key='WIFF.ctime', type='datetime', value=datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f"))
+			w.db.meta.insert(key='WIFF.version', type='int', value=str(WIFF_VERSION))
+			w.db.meta.insert(key='WIFF.ctime', type='datetime', value=ctime)
 
 			# Set channels
 			for c in props['channels']:
