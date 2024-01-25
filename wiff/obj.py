@@ -359,12 +359,20 @@ class WIFF_recording(_WIFF_obj_item):
 
 				ret = []
 				for c in chans:
-					if c.storage == 1: ret.append(f.u8())
-					elif c.storage == 2: ret.append(f.u16())
-					elif c.storage == 4: ret.append(f.u32())
-					elif c.storage == 8: ret.append(f.u64())
+					if c.digitalminvalue < 0:
+						if c.storage == 1: ret.append(f.s8())
+						elif c.storage == 2: ret.append(f.s16())
+						elif c.storage == 4: ret.append(f.s32())
+						elif c.storage == 8: ret.append(f.s64())
+						else:
+							raise ValueError("Unable to handle storage size %d in frame %d for channel %s" % (c.storage, x + s.fidx_start, c.name))
 					else:
-						raise ValueError("Unable to handle storage size %d in frame %d for channel %s" % (c.storage, x + s.fidx_start, c.name))
+						if c.storage == 1: ret.append(f.u8())
+						elif c.storage == 2: ret.append(f.u16())
+						elif c.storage == 4: ret.append(f.u32())
+						elif c.storage == 8: ret.append(f.u64())
+						else:
+							raise ValueError("Unable to handle storage size %d in frame %d for channel %s" % (c.storage, x + s.fidx_start, c.name))
 
 				# Give the absolute frame number, channel names, and the raw data
 				yield (s.fidx_start + x, chans_nice, ret)
