@@ -47,11 +47,15 @@ def new(fname, props, force=False):
 		'description'	string describing the recording
 		'fs'			sampling frequency (int)
 		'channels'		list of channels
-			'idx'			channel index (zero based)
-			'name'			name of the channel
-			'bits'			bits (int) of each measurement
-			'unit'			physical units of the measurement (str)
-			'comment'		Arbitrary comment on the channel
+			'idx'				channel index (zero based)
+			'name'				name of the channel
+			'bits'				bits (int) of each measurement
+			'unit'				physical units of the measurement (str)
+			'digitalminvalue'	Minimum digitized value
+			'digitalmaxvalue'	Maximum digitized value
+			'analogminvalue'	Minimum analog/physical value
+			'analogmaxvalue'	Maximum analog/physical value
+			'comment'			Arbitrary comment on the channel
 		'files'			list of files, probably empty (except for INFO file) for a new recording
 	"""
 

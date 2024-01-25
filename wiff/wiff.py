@@ -68,9 +68,9 @@ class WIFF:
 			raise Exception("File is a sqlite file, but application_id is wrong (%d but should be %d)" % (app_id, APPLICATION_ID))
 
 		# Check file version
-		row = w.db.settings.select_one('value', "`key`='WIFF.Version'")
+		row = w.db.settings.select_one('value', "`key`='WIFF.version'")
 		if row is None:
-			raise ValueError("WIFF file does not contain a settings table, file is malformed")
+			raise ValueError("WIFF settings table does not have a WIFF.version value, malformed file")
 		else:
 			v = int(row['value'])
 			if v != WIFF_VERSION:
@@ -139,7 +139,7 @@ class WIFF:
 					q,r = divmod(c['bits'], 8)
 					c['storage'] = q + (r and 1 or 0)
 
-				w.db.channel.insert(id_recording=id_r, idx=c['idx'], name=c['name'], bits=c['bits'], storage=c['storage'], unit=c['unit'], comment=c['comment'])
+				w.db.channel.insert(id_recording=id_r, idx=c['idx'], name=c['name'], bits=c['bits'], storage=c['storage'], unit=c['unit'], analogminvalue=c['analogminvalue'], analogmaxvalue=c['analogmaxvalue'], digitalminvalue=c['digitalminvalue'], digitalmaxvalue=c['digitalmaxvalue'], comment=c['comment'])
 
 		return w
 
