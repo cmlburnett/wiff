@@ -334,6 +334,89 @@ class WIFF_recording(_WIFF_obj_item):
 	def frame_table(self):
 		return WIFF_frame_table(self._w, self._id)
 
+	def GetSliceFrames(self, s):
+		"""
+		Iterate through the slice of frames @s and return only that data even if spans across segments.
+		"""
+		for seg in self.segment.values():
+			# Possibilities
+			#  1) Slice is entirely before the current segment
+			#  2) Slice overlaps the start of the current segment and ends within the segment
+			#  3) Slice overlaps the current segment entirely
+			#  4) Slice overlaps the end of the current segment
+			#  5) Slice is within the current segment
+			#  6) Slice doesn't overlap with the segment at all
+
+			# (1)
+			if s.stop < seg.fidx_start:
+				# Slice is before this segment, no more data to be found in the slice
+				return
+
+			# (6)
+			elif s.start > seg.fidx_end:
+				continue
+
+			# (2)
+			elif s.start <= seg.fidx_start and s.stop <= seg.fidx_end:
+				start = seg.fidx_start
+				end = s.stop-1
+
+			# (3)
+			elif s.start <= seg.fidx_start and seg.fidx_end <= s.stop:
+				start = seg.fidx_start
+				end = seg.fidx_end
+
+			# (4)
+			elif s.start <= seg.fidx_end and s.stop > seg.fidx_end:
+				start = s.start
+				end = seg.fidx_end
+
+			# (5)
+			elif s.start >= seg.fidx_start and s.stop <= seg.fidx_end:
+				start = seg.fidx_start
+				end = seg.fidx_end
+
+			else:
+				raise NotImplementedError("Not sure how it reached this point (s=%s; segment=[%d,%d])" % (str(s), seg.fidx_start, seg.fidx_end))
+
+			start -= seg.fidx_start
+			end -= seg.fidx_start
+
+			cs = seg.channelset
+			chans = [_.channel for _ in cs]
+			# Just channel names to yield
+			chans_nice = [c.name for c in chans]
+			b = seg.blob
+
+			if b.compression is not None:
+				raise ValueError("Compression not implemented")
+
+			for x in range(start, end+1):
+				off = x * seg.stride
+				f = funpack.funpack(b.data[off:off+seg.stride], 'little')
+
+				# TODO: option to scale by DigitalMinValue, DigitalMaxValue, AnalogMinValue, and AnalogMaxvalue
+
+				ret = []
+				for c in chans:
+					if c.digitalminvalue < 0:
+						if c.storage == 1: ret.append(f.s8())
+						elif c.storage == 2: ret.append(f.s16())
+						elif c.storage == 4: ret.append(f.s32())
+						elif c.storage == 8: ret.append(f.s64())
+						else:
+							raise ValueError("Unable to handle storage size %d in frame %d for channel %s" % (c.storage, x + seg.fidx_start, c.name))
+					else:
+						if c.storage == 1: ret.append(f.u8())
+						elif c.storage == 2: ret.append(f.u16())
+						elif c.storage == 4: ret.append(f.u32())
+						elif c.storage == 8: ret.append(f.u64())
+						else:
+							raise ValueError("Unable to handle storage size %d in frame %d for channel %s" % (c.storage, x + seg.fidx_start, c.name))
+
+				# Give the absolute frame number, channel names, and the raw data
+				yield (seg.fidx_start + x, chans_nice, ret)
+
 	def GetAllFrames(self):
 		"""
 		Iterates through all segments and returns each frame.
